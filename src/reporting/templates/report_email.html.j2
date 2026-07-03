@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GR Report</title>
+  </head>
+  <body style="margin:0; padding:0; background-color:#f4f5f7; font-family: Arial, Helvetica, sans-serif; color:#1a1a1a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7; padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="background-color:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #e2e4e8; max-width:640px;">
+            <tr>
+              <td style="background-color:#0f4c81; padding:20px 28px;">
+                <h1 style="margin:0; font-size:20px; line-height:1.3; color:#ffffff; font-family: Arial, Helvetica, sans-serif;">GR Report</h1>
+              </td>
+            </tr>
+            {% if warnings %}
+            <tr>
+              <td style="padding:16px 28px; background-color:#fff4e5; border-bottom:1px solid #f0d9a8;">
+                <p style="margin:0 0 6px 0; font-weight:bold; color:#8a5300; font-size:14px;">This report is incomplete</p>
+                <ul style="margin:0; padding-left:18px; color:#8a5300; font-size:13px;">
+                  {% for warning in warnings %}
+                  <li style="margin:4px 0;">{{ warning }}</li>
+                  {% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td style="padding:20px 28px 4px 28px;">
+                <p style="margin:0; font-size:14px; color:#555555;">Source file: <strong>{{ source_filename }}</strong></p>
+                <p style="margin:4px 0 0 0; font-size:14px; color:#555555;">Reporting period: <strong>{{ period_label }}</strong></p>
+              </td>
+            </tr>
+            {% if has_plant %}
+            <tr>
+              <td style="padding:20px 28px 8px 28px;">
+                <h2 style="margin:0 0 12px 0; font-size:16px; color:#1a1a1a; font-family: Arial, Helvetica, sans-serif;">Plant-wise GR Value</h2>
+                <img src="cid:plant_chart" alt="Plant-wise GR Value chart" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 28px 20px 28px; font-size:13px; color:#1a1a1a;">
+                {{ plant_table_html | safe }}
+              </td>
+            </tr>
+            {% endif %}
+            {% if has_buyer %}
+            <tr>
+              <td style="padding:8px 28px 24px 28px;">
+                <h2 style="margin:0 0 12px 0; font-size:16px; color:#1a1a1a; font-family: Arial, Helvetica, sans-serif;">Top 10 Buyers by GR Value</h2>
+                <img src="cid:buyer_chart" alt="Top 10 Buyers by GR Value chart" width="600" style="display:block; width:100%; max-width:600px; height:auto; border:0;">
+              </td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td style="padding:16px 28px; background-color:#f9fafb; border-top:1px solid #e2e4e8;">
+                <p style="margin:0; font-size:12px; color:#888888;">Generated automatically by the GR Report Agent. All figures are in &#8377; Crore.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
