@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api._common import api_error, ok
+from config.settings import get_settings
 from db.models import ChatMessage, Conversation, Dataset, DatasetProfile, QueryRun
 from db.session import get_session
 from domain.conversation import (
@@ -25,6 +26,16 @@ from domain.conversation import (
 from graph.runner import run_agent
 
 router = APIRouter()
+
+# INR is display-derived from the canonical USD value (spec/capabilities/
+# cost-and-audit-trail.md). Round to 4 decimals so small USD costs still show a
+# nonzero INR rather than truncating to 0.00.
+_INR_DECIMALS = 4
+
+
+def _to_inr(usd: float, rate: float) -> float:
+    return round((usd or 0.0) * rate, _INR_DECIMALS)
+
 
 # Simple in-memory per-conversation lock (spec/agent.md -> Concurrency Model).
 # A single local user, synchronous requests — a dict of conversation_id -> bool
@@ -124,6 +135,8 @@ def post_message(
 
     session.refresh(conversation)
 
+    rate = get_settings().usd_to_inr_rate
+
     return ok(
         AskQuestionResponse(
             message=ChatMessageResponse(
@@ -146,8 +159,10 @@ def post_message(
                 prompt_tokens=run.prompt_tokens,
                 completion_tokens=run.completion_tokens,
                 estimated_cost_usd=run.estimated_cost_usd,
+                estimated_cost_inr=_to_inr(run.estimated_cost_usd, rate),
                 latency_ms=run.latency_ms,
             ),
+            usd_to_inr_rate=rate,
         ).model_dump()
     )
 
@@ -172,6 +187,7 @@ def get_messages(conversation_id: str, session: Session = Depends(get_session)) 
 
     session_cost_total_usd = sum(r.estimated_cost_usd or 0.0 for r in runs)
     session_tokens_total = sum((r.prompt_tokens or 0) + (r.completion_tokens or 0) for r in runs)
+    rate = get_settings().usd_to_inr_rate
 
     return ok(
         ConversationHistoryResponse(
@@ -191,6 +207,8 @@ def get_messages(conversation_id: str, session: Session = Depends(get_session)) 
                 for m in messages
             ],
             session_cost_total_usd=session_cost_total_usd,
+            session_cost_total_inr=_to_inr(session_cost_total_usd, rate),
             session_tokens_total=session_tokens_total,
+            usd_to_inr_rate=rate,
         ).model_dump()
     )

@@ -72,6 +72,12 @@ def test_full_conversation_flow_happy_path(api_client, monkeypatch, tmp_path):
     assert query_run["prompt_tokens"] > 0
     assert query_run["completion_tokens"] > 0
     assert query_run["estimated_cost_usd"] > 0
+    # INR is display-derived from USD using the echoed rate.
+    ask_rate = ask_body["usd_to_inr_rate"]
+    assert ask_rate > 0
+    assert query_run["estimated_cost_inr"] == pytest.approx(
+        round(query_run["estimated_cost_usd"] * ask_rate, 4), abs=1e-9
+    )
     assert query_run["step_count"] == 1
 
     # key_numbers must be populated and contain the real computed total.
@@ -103,6 +109,11 @@ def test_full_conversation_flow_happy_path(api_client, monkeypatch, tmp_path):
 
     assert history["session_cost_total_usd"] == pytest.approx(
         query_run["estimated_cost_usd"], rel=1e-6
+    )
+    hist_rate = history["usd_to_inr_rate"]
+    assert hist_rate > 0
+    assert history["session_cost_total_inr"] == pytest.approx(
+        round(history["session_cost_total_usd"] * hist_rate, 4), abs=1e-9
     )
     assert history["session_tokens_total"] == (
         query_run["prompt_tokens"] + query_run["completion_tokens"]

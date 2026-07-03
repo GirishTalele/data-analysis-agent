@@ -143,8 +143,11 @@ data/
 | `max_steps` | `AGENT_MAX_STEPS` | `1` (Phase 1) / `5` (Phase 2) | Iterative-refinement step limit |
 | `gemini_input_price_per_1m` | `AGENT_GEMINI_INPUT_PRICE_PER_1M` | `1.25` (assumed, USD) | Cost estimation |
 | `gemini_output_price_per_1m` | `AGENT_GEMINI_OUTPUT_PRICE_PER_1M` | `5.00` (assumed, USD) | Cost estimation |
+| `usd_to_inr_rate` | `AGENT_USD_TO_INR` | `88.0` | Fixed local USD→INR rate for display-only INR cost (no external FX API); USD stays canonical/stored, INR is derived in the API response layer |
 | `langchain_tracing_v2` | `LANGCHAIN_TRACING_V2` | `false` | LangSmith tracing toggle |
 | `langchain_api_key` | `LANGCHAIN_API_KEY` | `""` | LangSmith key (optional) |
+
+**Cost currency display:** the canonical stored cost is USD only (`QueryRun.estimated_cost_usd`, unchanged — no DB migration). INR is a pure display-derived value computed once in the backend API response layer as `cost_usd * usd_to_inr_rate` and returned as `estimated_cost_inr` / `session_cost_total_inr` / `total_cost_inr` plus the echoed `usd_to_inr_rate` (see `spec/api.md`), so chat cost badges and the audit dashboard share one source of truth. The rate is a fixed, configurable local setting (`AGENT_USD_TO_INR`) — local-first, no external FX API call.
 
 > **Assumed:** Gemini per-token prices above are placeholders pending verification against current Gemini pricing docs — they only affect the *displayed estimate*, not correctness of the analysis; they are configurable via `.env` so the user can correct them.
 

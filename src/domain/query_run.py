@@ -28,6 +28,8 @@ class QueryRunAuditResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     estimated_cost_usd: float
+    # Display-derived (estimated_cost_usd * usd_to_inr_rate); not stored, no migration.
+    estimated_cost_inr: float
     latency_ms: int
     question_text: str
     created_at: datetime
@@ -40,6 +42,8 @@ class QueryRunListResponse(BaseModel):
     limit: int
     offset: int
     total: int
+    # Echoes the configured AGENT_USD_TO_INR — one source of truth for both currencies.
+    usd_to_inr_rate: float
 
 
 class CostSummaryResponse(BaseModel):
@@ -49,4 +53,7 @@ class CostSummaryResponse(BaseModel):
     date: str | None = None
     total_tokens: int
     total_cost_usd: float
+    # Display-derived (total_cost_usd * usd_to_inr_rate); not stored, no migration.
+    total_cost_inr: float
+    usd_to_inr_rate: float
     query_count: int

@@ -8,6 +8,7 @@ import {
   type CostSummary,
   type QueryRun,
 } from '@/lib/api'
+import { formatCostPair } from '@/lib/cost'
 
 const STATUS_OPTIONS = ['', 'success', 'failed', 'cannot_answer'] as const
 
@@ -75,7 +76,7 @@ export default function AuditPage() {
         <div>
           <div className="text-xs uppercase tracking-wide text-gray-400">Cost today</div>
           <div className="text-xl font-bold text-gray-900">
-            ${(costToday?.total_cost_usd ?? 0).toFixed(4)}
+            {formatCostPair(costToday?.total_cost_usd ?? 0, costToday?.total_cost_inr ?? 0)}
           </div>
         </div>
         <div>
@@ -161,7 +162,9 @@ export default function AuditPage() {
                   <td className="px-3 py-2 text-gray-600">
                     {(r.prompt_tokens + r.completion_tokens).toLocaleString()}
                   </td>
-                  <td className="px-3 py-2 text-gray-600">${r.estimated_cost_usd.toFixed(4)}</td>
+                  <td className="px-3 py-2 text-gray-600">
+                    {formatCostPair(r.estimated_cost_usd, r.estimated_cost_inr)}
+                  </td>
                 </tr>
               ))}
             </tbody>

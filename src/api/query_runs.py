@@ -13,6 +13,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api._common import api_error, ok
+from config.settings import get_settings
 from db.models import QueryRun
 from db.session import get_session
 from domain.query_run import (
@@ -22,6 +23,15 @@ from domain.query_run import (
 )
 
 router = APIRouter()
+
+# INR is display-derived from the canonical USD value (spec/capabilities/
+# cost-and-audit-trail.md). Round to 4 decimals so small USD costs still show a
+# nonzero INR rather than truncating to 0.00.
+_INR_DECIMALS = 4
+
+
+def _to_inr(usd: float, rate: float) -> float:
+    return round((usd or 0.0) * rate, _INR_DECIMALS)
 
 
 def _to_utc(dt: datetime) -> datetime:
@@ -41,7 +51,7 @@ def _parse_boundary(value: str) -> tuple[datetime, bool]:
         return datetime.fromisoformat(value), False
 
 
-def _serialize(run: QueryRun) -> QueryRunAuditResponse:
+def _serialize(run: QueryRun, rate: float) -> QueryRunAuditResponse:
     # `result_table_json` is added by a sibling slice; default to None so this
     # serialization works even if that column lands slightly after this code.
     result_table = getattr(run, "result_table_json", None)
@@ -58,6 +68,7 @@ def _serialize(run: QueryRun) -> QueryRunAuditResponse:
         prompt_tokens=run.prompt_tokens,
         completion_tokens=run.completion_tokens,
         estimated_cost_usd=run.estimated_cost_usd,
+        estimated_cost_inr=_to_inr(run.estimated_cost_usd, rate),
         latency_ms=run.latency_ms,
         question_text=run.question_text,
         created_at=run.created_at,
@@ -110,12 +121,15 @@ def list_query_runs(
         .all()
     )
 
+    rate = get_settings().usd_to_inr_rate
+
     return ok(
         QueryRunListResponse(
-            query_runs=[_serialize(r) for r in runs],
+            query_runs=[_serialize(r, rate) for r in runs],
             limit=limit,
             offset=offset,
             total=total,
+            usd_to_inr_rate=rate,
         ).model_dump(mode="json")
     )
 
@@ -161,12 +175,17 @@ def cost_summary(
         func.count(QueryRun.id),
     ).one()
 
+    rate = get_settings().usd_to_inr_rate
+    total_cost_usd = round(float(total_cost), 6)
+
     return ok(
         CostSummaryResponse(
             scope=scope,
             date=result_date,
             total_tokens=int(total_tokens),
-            total_cost_usd=round(float(total_cost), 6),
+            total_cost_usd=total_cost_usd,
+            total_cost_inr=_to_inr(total_cost_usd, rate),
+            usd_to_inr_rate=rate,
             query_count=int(query_count),
         ).model_dump()
     )

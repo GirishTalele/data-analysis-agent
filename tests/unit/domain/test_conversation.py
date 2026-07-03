@@ -35,10 +35,12 @@ def test_query_run_response_matches_api_shape():
         prompt_tokens=812,
         completion_tokens=96,
         estimated_cost_usd=0.0016,
+        estimated_cost_inr=0.1408,
         latency_ms=4210,
     )
     assert qr.execution_status == "success"
     assert qr.key_numbers["average_amount"] == 88.4
+    assert qr.estimated_cost_inr == 0.1408
 
 
 def test_query_run_response_failure_status_allows_null_code_and_answer():
@@ -52,6 +54,7 @@ def test_query_run_response_failure_status_allows_null_code_and_answer():
         prompt_tokens=0,
         completion_tokens=0,
         estimated_cost_usd=0.0,
+        estimated_cost_inr=0.0,
         latency_ms=100,
     )
     assert qr.generated_code is None
@@ -79,12 +82,16 @@ def test_ask_question_response_full_envelope():
             "prompt_tokens": 812,
             "completion_tokens": 96,
             "estimated_cost_usd": 0.0016,
+            "estimated_cost_inr": 0.1408,
             "latency_ms": 4210,
         },
+        "usd_to_inr_rate": 88.0,
     }
     result = AskQuestionResponse.model_validate(payload)
     assert result.message.role == "assistant"
     assert result.query_run.execution_status == "success"
+    assert result.usd_to_inr_rate == 88.0
+    assert result.query_run.estimated_cost_inr == 0.1408
 
 
 def test_conversation_history_response_full_envelope_matches_api_shape():
@@ -106,7 +113,9 @@ def test_conversation_history_response_full_envelope_matches_api_shape():
             },
         ],
         "session_cost_total_usd": 0.0016,
+        "session_cost_total_inr": 0.1408,
         "session_tokens_total": 908,
+        "usd_to_inr_rate": 88.0,
     }
     result = ConversationHistoryResponse.model_validate(payload)
     assert result.conversation.created_at is None
@@ -114,6 +123,8 @@ def test_conversation_history_response_full_envelope_matches_api_shape():
     assert result.messages[0].query_run_id is None
     assert result.messages[1].query_run_id == "uuid3"
     assert result.session_tokens_total == 908
+    assert result.session_cost_total_inr == 0.1408
+    assert result.usd_to_inr_rate == 88.0
 
 
 def test_conversation_history_response_empty_conversation_no_messages():
@@ -122,7 +133,9 @@ def test_conversation_history_response_empty_conversation_no_messages():
         "conversation": {"id": "uuid", "dataset_id": "uuid", "title": "Untitled analysis"},
         "messages": [],
         "session_cost_total_usd": 0.0,
+        "session_cost_total_inr": 0.0,
         "session_tokens_total": 0,
+        "usd_to_inr_rate": 88.0,
     }
     result = ConversationHistoryResponse.model_validate(payload)
     assert result.messages == []

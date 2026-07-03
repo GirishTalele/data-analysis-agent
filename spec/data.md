@@ -95,7 +95,7 @@ One row per user question — the full record of what was asked, what code ran, 
 | result_table_json | JSON | no | Structured summary table backing a tabular/breakdown answer (Phase 2), shape `{ "columns": [str, ...], "rows": [[cell, ...], ...] }`. This is AGGREGATED/DERIVED output (e.g. a groupby result), NOT raw source rows — it is produced only from the already-summarized execution result and therefore stays within the raw-row privacy boundary, subject to the same row cap (`AGENT_MAX_SUMMARY_ROWS`; see `spec/architecture.md` → Raw-Row Privacy Boundary). `null` when the answer has no tabular breakdown (scalar-only answers) and always `null` in Phase 1. |
 | prompt_tokens | integer | yes | Summed across all LLM calls in this turn |
 | completion_tokens | integer | yes | Summed across all LLM calls in this turn |
-| estimated_cost_usd | numeric | yes | Computed from `prompt_tokens`/`completion_tokens` and the configured per-token prices (see `spec/architecture.md`) |
+| estimated_cost_usd | numeric | yes | Computed from `prompt_tokens`/`completion_tokens` and the configured per-token prices (see `spec/architecture.md`). This is the **canonical, stored** cost value. The INR equivalent shown in API responses (`estimated_cost_inr`, `session_cost_total_inr`, `total_cost_inr`) is **display-derived** (`usd * AGENT_USD_TO_INR`) in the API response layer — **not stored on any entity and no DB migration**; see `spec/api.md`. |
 | latency_ms | integer | yes | Wall-clock time for the whole turn |
 | error_message | text | no | Set when `execution_status="failed"` or `"execution_error"` |
 | created_at | timestamp | yes | |

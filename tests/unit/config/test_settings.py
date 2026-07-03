@@ -65,6 +65,7 @@ def test_new_settings_defaults(monkeypatch, tmp_path):
         "AGENT_MAX_STEPS",
         "AGENT_GEMINI_INPUT_PRICE_PER_1M",
         "AGENT_GEMINI_OUTPUT_PRICE_PER_1M",
+        "AGENT_USD_TO_INR",
         "AGENT_HISTORY_TURNS",
         "LANGCHAIN_TRACING_V2",
         "LANGCHAIN_API_KEY",
@@ -85,6 +86,7 @@ def test_new_settings_defaults(monkeypatch, tmp_path):
     assert s.max_steps == 5  # Phase 2 default (was 1 in Phase 1)
     assert s.gemini_input_price_per_1m == 1.25
     assert s.gemini_output_price_per_1m == 5.00
+    assert s.usd_to_inr_rate == 88.0
     assert s.agent_history_turns == 10
     assert s.langchain_tracing_v2 is False
     assert s.langchain_api_key == ""
@@ -101,12 +103,14 @@ def test_new_settings_env_overrides(monkeypatch, tmp_path):
     monkeypatch.setenv("AGENT_MAX_STEPS", "5")
     monkeypatch.setenv("AGENT_GEMINI_INPUT_PRICE_PER_1M", "2.5")
     monkeypatch.setenv("AGENT_GEMINI_OUTPUT_PRICE_PER_1M", "10.0")
+    monkeypatch.setenv("AGENT_USD_TO_INR", "90.5")
     monkeypatch.setenv("AGENT_HISTORY_TURNS", "20")
 
     import config.settings as m
     m._settings = None
     s = m.get_settings()
 
+    assert s.usd_to_inr_rate == 90.5
     assert s.data_dir == "/tmp/custom-data"
     assert s.max_upload_mb == 250
     assert s.sandbox_timeout_seconds == 45

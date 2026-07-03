@@ -93,12 +93,16 @@ REST (FastAPI), envelope pattern per the existing skeleton (`ok(data)` / `api_er
       "prompt_tokens": 812,
       "completion_tokens": 96,
       "estimated_cost_usd": 0.0016,
+      "estimated_cost_inr": 0.1408,
       "latency_ms": 4210
-    }
+    },
+    "usd_to_inr_rate": 88.0
   },
   "error": null
 }
 ```
+
+**Cost in INR (display-derived):** `estimated_cost_inr` is computed by the API as `estimated_cost_usd * usd_to_inr_rate` (rounded to 2–4 decimals as appropriate for small values); `usd_to_inr_rate` echoes the configured `AGENT_USD_TO_INR` setting (default `88.0`). It is **not** stored on `QueryRun` and there is no DB migration — the canonical stored value is `estimated_cost_usd` only. The UI renders both as `$0.0016 (₹0.14)`.
 
 **`result_table` field (Phase 2):** the `query_run` object also carries `result_table`, shape `{ "columns": [...], "rows": [...] } | null`, the structured summary table backing a tabular/breakdown answer (maps to `QueryRun.result_table_json` in `spec/data.md`). It is `null` for scalar-only answers and always `null` in Phase 1. It is AGGREGATED/DERIVED output, never raw source rows, and never exceeds `AGENT_MAX_SUMMARY_ROWS` rows. Example — for "average revenue by region":
 ```json
@@ -131,13 +135,17 @@ This same `result_table` field also appears on each `QueryRun` record returned b
       { "id": "uuid", "role": "assistant", "content": "The average order amount is $88.40.", "query_run_id": "uuid", "created_at": "iso8601" }
     ],
     "session_cost_total_usd": 0.0016,
-    "session_tokens_total": 908
+    "session_cost_total_inr": 0.1408,
+    "session_tokens_total": 908,
+    "usd_to_inr_rate": 88.0
   },
   "error": null
 }
 ```
 
 **Error cases:** `404` if `conversation_id` doesn't exist.
+
+`session_cost_total_inr` is display-derived (`session_cost_total_usd * usd_to_inr_rate`) — not stored, no migration; see the note under `POST /conversations/{id}/messages`.
 
 ## Endpoints / Commands — Phase 2
 
@@ -194,7 +202,7 @@ This same `result_table` field also appears on each `QueryRun` record returned b
 
 **Query params:** `dataset_id`, `conversation_id`, `from`, `to`, `execution_status` (all optional filters), `limit`, `offset`.
 
-**Response:** paginated list of `QueryRun` records (same shape as the `query_run` object in `POST /conversations/{id}/messages`, including the `result_table` field).
+**Response:** paginated list of `QueryRun` records (same shape as the `query_run` object in `POST /conversations/{id}/messages`, including the `result_table` field and the display-derived `estimated_cost_inr` per run). The envelope also carries `usd_to_inr_rate` (the configured `AGENT_USD_TO_INR`) so the audit table can render both currencies from one source of truth.
 
 ### `GET /cost-summary`
 
@@ -204,8 +212,10 @@ This same `result_table` field also appears on each `QueryRun` record returned b
 
 **Response:**
 ```json
-{ "data": { "scope": "day", "date": "2026-07-03", "total_tokens": 15230, "total_cost_usd": 0.041, "query_count": 9 }, "error": null }
+{ "data": { "scope": "day", "date": "2026-07-03", "total_tokens": 15230, "total_cost_usd": 0.041, "total_cost_inr": 3.608, "usd_to_inr_rate": 88.0, "query_count": 9 }, "error": null }
 ```
+
+`total_cost_inr` is display-derived (`total_cost_usd * usd_to_inr_rate`) — not stored, no migration. `usd_to_inr_rate` echoes the configured `AGENT_USD_TO_INR`.
 
 ## Authentication
 

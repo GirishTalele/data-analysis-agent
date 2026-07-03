@@ -89,10 +89,17 @@ def test_query_runs_happy_path_returns_all_with_shape(seeded):
         "id", "execution_status", "generated_code", "answer_text",
         "key_numbers", "result_table", "follow_up_suggestions", "anomalies",
         "step_count", "prompt_tokens", "completion_tokens",
-        "estimated_cost_usd", "latency_ms", "question_text", "created_at",
+        "estimated_cost_usd", "estimated_cost_inr", "latency_ms",
+        "question_text", "created_at",
     ):
         assert field in item, f"missing {field}"
     assert item["result_table"] is None
+    # INR is display-derived from USD using the echoed rate (one source of truth).
+    rate = data["usd_to_inr_rate"]
+    assert rate > 0
+    assert item["estimated_cost_inr"] == pytest.approx(
+        round(item["estimated_cost_usd"] * rate, 4), abs=1e-9
+    )
 
 
 def test_query_runs_filter_by_dataset_and_conversation(seeded):
@@ -158,6 +165,11 @@ def test_cost_summary_all_rolls_up_everything(seeded):
     # tokens = (150 + 280 + 400 + 1998); cost = 0.001+0.003+0.005+0.5
     assert data["total_tokens"] == 150 + 280 + 400 + 1998
     assert data["total_cost_usd"] == pytest.approx(0.509, abs=1e-6)
+    rate = data["usd_to_inr_rate"]
+    assert rate > 0
+    assert data["total_cost_inr"] == pytest.approx(
+        round(data["total_cost_usd"] * rate, 4), abs=1e-9
+    )
 
 
 def test_cost_summary_day_excludes_old_run(seeded):
@@ -199,3 +211,26 @@ def test_cost_summary_all_empty_db_returns_zeros(api_client):
     assert data["query_count"] == 0
     assert data["total_tokens"] == 0
     assert data["total_cost_usd"] == 0.0
+    assert data["total_cost_inr"] == 0.0
+    assert data["usd_to_inr_rate"] > 0
+
+
+def test_query_runs_small_cost_shows_nonzero_inr(api_client):
+    """A tiny USD cost must round to a nonzero INR (4-decimal precision),
+    never truncate to 0.00 (spec/capabilities/cost-and-audit-trail.md)."""
+    from db.models import Conversation, Dataset
+    from db.session import create_db_session
+
+    with create_db_session() as s:
+        s.add(Dataset(id="dsx", name="x.csv", status="ready"))
+        s.add(Conversation(id="cvx", dataset_id="dsx", title="c"))
+        s.flush()
+        _seed(s, id="rx", conversation_id="cvx", dataset_id="dsx", cost=0.0001)
+
+    resp = api_client.get("/query-runs", params={"conversation_id": "cvx"})
+    item = resp.json()["data"]["query_runs"][0]
+    rate = resp.json()["data"]["usd_to_inr_rate"]
+    assert item["estimated_cost_usd"] == pytest.approx(0.0001)
+    # 0.0001 * 88 = 0.0088 -> must remain nonzero at 4 decimals.
+    assert item["estimated_cost_inr"] > 0
+    assert item["estimated_cost_inr"] == pytest.approx(round(0.0001 * rate, 4))

@@ -18,6 +18,7 @@ import {
   type DatasetWithProfile,
   type QueryRun,
 } from '@/lib/api'
+import { formatCostPair } from '@/lib/cost'
 
 const DATASET_KEY = 'agent.datasetId'
 const CONVERSATION_KEY = 'agent.conversationId'
@@ -36,9 +37,14 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [queryRuns, setQueryRuns] = useState<Record<string, QueryRun>>({})
-  const [sessionTotals, setSessionTotals] = useState<{ tokens: number; cost: number }>({
+  const [sessionTotals, setSessionTotals] = useState<{
+    tokens: number
+    cost: number
+    costInr: number
+  }>({
     tokens: 0,
     cost: 0,
+    costInr: 0,
   })
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
@@ -70,6 +76,7 @@ export default function Home() {
           setSessionTotals({
             tokens: history.session_tokens_total,
             cost: history.session_cost_total_usd,
+            costInr: history.session_cost_total_inr,
           })
         }
       } catch {
@@ -108,7 +115,7 @@ export default function Home() {
       setConversationId(null)
       setMessages([])
       setQueryRuns({})
-      setSessionTotals({ tokens: 0, cost: 0 })
+      setSessionTotals({ tokens: 0, cost: 0, costInr: 0 })
     } catch (err) {
       if (err instanceof ApiError) {
         setUploadError(
@@ -202,6 +209,7 @@ export default function Home() {
       setSessionTotals({
         tokens: history.session_tokens_total,
         cost: history.session_cost_total_usd,
+        costInr: history.session_cost_total_inr,
       })
 
       if (response.query_run.execution_status !== 'success') {
@@ -270,8 +278,8 @@ export default function Home() {
               className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white"
               data-testid="session-total-badge"
             >
-              Session: {sessionTotals.tokens.toLocaleString()} tokens · $
-              {sessionTotals.cost.toFixed(4)}
+              Session: {sessionTotals.tokens.toLocaleString()} tokens ·{' '}
+              {formatCostPair(sessionTotals.cost, sessionTotals.costInr)}
             </span>
           )}
           <Link

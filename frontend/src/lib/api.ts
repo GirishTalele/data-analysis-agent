@@ -61,6 +61,9 @@ export type QueryRun = {
   prompt_tokens: number
   completion_tokens: number
   estimated_cost_usd: number
+  // Display-derived INR equivalent (estimated_cost_usd * usd_to_inr_rate),
+  // computed by the API — never stored, never computed in the frontend.
+  estimated_cost_inr: number
   latency_ms: number
   // Present on records returned by GET /query-runs (audit trail).
   conversation_id?: string
@@ -80,6 +83,9 @@ export type CostSummary = {
   date?: string
   total_tokens: number
   total_cost_usd: number
+  // Display-derived INR total (total_cost_usd * usd_to_inr_rate) from the API.
+  total_cost_inr: number
+  usd_to_inr_rate: number
   query_count: number
 }
 
@@ -95,12 +101,17 @@ export type MessagesResponse = {
   conversation: Conversation
   messages: ChatMessage[]
   session_cost_total_usd: number
+  // Display-derived INR session total from the API.
+  session_cost_total_inr: number
   session_tokens_total: number
+  usd_to_inr_rate: number
 }
 
 export type AskResponse = {
   message: ChatMessage
   query_run: QueryRun
+  // Configured USD→INR rate echoed by the API (AGENT_USD_TO_INR).
+  usd_to_inr_rate: number
 }
 
 type Envelope<T> = { data: T | null; error: { code: string; message: string } | null }

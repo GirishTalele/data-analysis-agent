@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     max_steps: int = Field(default=5)
     gemini_input_price_per_1m: float = Field(default=1.25)
     gemini_output_price_per_1m: float = Field(default=5.00)
+    # Fixed USD->INR rate for display-derived INR cost (no external FX API;
+    # USD stays canonical/stored — see spec/capabilities/cost-and-audit-trail.md).
+    usd_to_inr_rate: float = Field(default=88.0, validation_alias="AGENT_USD_TO_INR")
     # NOTE: attribute name already starts with "agent_" so env_prefix would otherwise
     # double up to AGENT_AGENT_HISTORY_TURNS — pin the alias explicitly.
     agent_history_turns: int = Field(default=10, validation_alias="AGENT_HISTORY_TURNS")

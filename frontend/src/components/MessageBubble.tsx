@@ -4,13 +4,10 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatMessage, QueryRun } from '@/lib/api'
+import { formatCostPair } from '@/lib/cost'
 import SummaryTable from './SummaryTable'
 import Chart from './Chart'
 import StepList from './StepList'
-
-function formatCost(usd: number): string {
-  return `$${usd.toFixed(4)}`
-}
 
 function CostBadge({ queryRun }: { queryRun: QueryRun }) {
   const tokens = queryRun.prompt_tokens + queryRun.completion_tokens
@@ -19,7 +16,8 @@ function CostBadge({ queryRun }: { queryRun: QueryRun }) {
       className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500"
       data-testid="cost-badge"
     >
-      {tokens.toLocaleString()} tokens · {formatCost(queryRun.estimated_cost_usd)}
+      {tokens.toLocaleString()} tokens ·{' '}
+      {formatCostPair(queryRun.estimated_cost_usd, queryRun.estimated_cost_inr)}
     </span>
   )
 }

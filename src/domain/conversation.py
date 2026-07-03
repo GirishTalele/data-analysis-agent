@@ -47,14 +47,18 @@ class QueryRunResponse(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     estimated_cost_usd: float
+    # Display-derived (estimated_cost_usd * usd_to_inr_rate); not stored, no migration.
+    estimated_cost_inr: float
     latency_ms: int
 
 
 class AskQuestionResponse(BaseModel):
-    """`{message, query_run}` envelope for `POST /conversations/{id}/messages`."""
+    """`{message, query_run, usd_to_inr_rate}` envelope for `POST /conversations/{id}/messages`."""
 
     message: ChatMessageResponse
     query_run: QueryRunResponse
+    # Echoes the configured AGENT_USD_TO_INR so the UI renders both currencies.
+    usd_to_inr_rate: float
 
 
 class ConversationHistoryResponse(BaseModel):
@@ -63,4 +67,8 @@ class ConversationHistoryResponse(BaseModel):
     conversation: ConversationResponse
     messages: list[ChatMessageResponse]
     session_cost_total_usd: float
+    # Display-derived (session_cost_total_usd * usd_to_inr_rate); not stored.
+    session_cost_total_inr: float
     session_tokens_total: int
+    # Echoes the configured AGENT_USD_TO_INR.
+    usd_to_inr_rate: float

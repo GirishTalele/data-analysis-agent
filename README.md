@@ -14,6 +14,10 @@ cp .env.example .env
 
 Edit `.env` and set `AGENT_GEMINI_API_KEY=<your key>` — this is the only required key for this project.
 
+Optional cost-display setting:
+
+- `AGENT_USD_TO_INR` — fixed USD→INR rate used to show every cost in both currencies (e.g. `$0.0016 (₹0.14)`). Default `88.0`. USD stays the canonical, stored value; INR is display-derived in API responses (`cost_inr = cost_usd * AGENT_USD_TO_INR`) — no external FX API, no DB migration.
+
 ## Install
 
 ```bash
