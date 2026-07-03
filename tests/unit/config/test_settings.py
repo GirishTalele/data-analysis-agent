@@ -82,7 +82,7 @@ def test_new_settings_defaults(monkeypatch, tmp_path):
     assert s.sandbox_timeout_seconds == 20
     assert s.max_summary_rows == 20
     assert s.max_summary_items == 50
-    assert s.max_steps == 1
+    assert s.max_steps == 5  # Phase 2 default (was 1 in Phase 1)
     assert s.gemini_input_price_per_1m == 1.25
     assert s.gemini_output_price_per_1m == 5.00
     assert s.agent_history_turns == 10

@@ -141,6 +141,7 @@ def post_message(
                 key_numbers=run.key_numbers_json,
                 follow_up_suggestions=run.follow_up_suggestions_json or [],
                 anomalies=run.anomalies_json or [],
+                result_table=run.result_table_json,
                 step_count=run.step_count,
                 prompt_tokens=run.prompt_tokens,
                 completion_tokens=run.completion_tokens,

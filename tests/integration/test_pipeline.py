@@ -176,7 +176,10 @@ def test_pipeline_execution_error_is_handled_as_cannot_answer(_dataset_with_prof
 
     monkeypatch.setattr(executor_module, "run_code", _fake_run_code)
 
-    run_id = run_agent(dataset_id, conversation_id, "What is the average of a column that does not exist?")
+    # Use a plainly-answerable question so the (now-active, Phase-2) check_clarity
+    # step lets it through to code execution — the forced sandbox error is what
+    # drives the cannot_answer path, not a clarification round-trip.
+    run_id = run_agent(dataset_id, conversation_id, "What is the total amount across all rows?")
 
     with Session(session_module._engine) as s:
         run = s.get(QueryRun, run_id)
@@ -191,8 +194,9 @@ def test_pipeline_execution_error_is_handled_as_cannot_answer(_dataset_with_prof
 @pytest.mark.usefixtures("_require_gemini_key")
 def test_pipeline_empty_question_still_produces_a_recorded_run(_dataset_with_profile):
     """Edge case: an empty/degenerate question must not crash the pipeline —
-    it either produces a real (if unhelpful) answer or a clean cannot_answer,
-    but the QueryRun audit row is always written."""
+    it produces a real (if unhelpful) answer, a clean cannot_answer, or (with
+    the now-active Phase-2 check_clarity) a clarification request — but the
+    QueryRun audit row is always written."""
     dataset_id, conversation_id = _dataset_with_profile
 
     run_id = run_agent(dataset_id, conversation_id, "")
@@ -202,7 +206,13 @@ def test_pipeline_empty_question_still_produces_a_recorded_run(_dataset_with_pro
 
     assert run is not None
     assert run.question_text == ""
-    assert run.execution_status in ("success", "cannot_answer", "execution_error", "failed")
+    assert run.execution_status in (
+        "success",
+        "cannot_answer",
+        "execution_error",
+        "clarification_needed",
+        "failed",
+    )
     assert run.created_at is not None
 
 
@@ -229,6 +239,132 @@ def test_pipeline_multi_turn_history_is_persisted_and_capped(_dataset_with_profi
     # Two turns -> two assistant ChatMessages persisted (state survives across turns).
     assistant_messages = [m for m in all_messages if m.role == "assistant"]
     assert len(assistant_messages) == 2
+
+
+@pytest.mark.usefixtures("_require_gemini_key")
+def test_pipeline_multifile_answer_reflects_combined_rows(
+    api_client, monkeypatch, tmp_path, large_multifile_dataset
+):
+    """Phase-2 multi-file win, on the LLM answer path: a dataset backed by two
+    uploaded files must be analyzed against the UNION of both files, not just
+    the newest single file. We upload two monthly CSVs whose combined revenue
+    sum is observably different from either file alone, then ask a real Gemini
+    turn for the total revenue and assert the answer reflects the COMBINED sum
+    (and is NOT within tolerance of the single-file sum)."""
+    import pandas as pd
+    from sqlalchemy.orm import Session as _Session
+
+    monkeypatch.setenv("AGENT_DATA_DIR", str(tmp_path))
+    import config.settings as settings_module
+
+    settings_module._settings = None
+
+    files = large_multifile_dataset["files"]
+    file_a, file_b = files[0], files[-1]  # two very different monthly distributions
+
+    df_a = pd.read_csv(file_a)
+    df_b = pd.read_csv(file_b)
+    combined_sum = round(float(pd.concat([df_a, df_b], ignore_index=True)["revenue"].sum()), 2)
+    single_sum = round(float(df_a["revenue"].sum()), 2)
+    # Sanity: the two totals must be far apart or the test can't discriminate.
+    assert abs(combined_sum - single_sum) > 100.0
+
+    # 1) Create the dataset with the first file, then add the second (-> multi_file).
+    first = api_client.post(
+        "/datasets", files={"file": (file_a.name, file_a.read_bytes(), "text/csv")}
+    )
+    assert first.status_code == 200, first.text
+    dataset_id = first.json()["data"]["dataset"]["id"]
+
+    second = api_client.post(
+        f"/datasets/{dataset_id}/files",
+        files={"file": (file_b.name, file_b.read_bytes(), "text/csv")},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["data"]["dataset"]["kind"] == "multi_file"
+
+    # 2) A conversation to run the agent turn against.
+    with _Session(session_module._engine) as s:
+        conversation = Conversation(dataset_id=dataset_id, title="Untitled analysis")
+        s.add(conversation)
+        s.commit()
+        conversation_id = conversation.id
+
+    # 3) Real Gemini turn: total revenue over ALL rows.
+    run_id = run_agent(
+        dataset_id, conversation_id, "What is the total revenue summed across all rows?"
+    )
+    assert run_id is not None
+
+    with Session(session_module._engine) as s:
+        run = s.get(QueryRun, run_id)
+
+    assert run is not None
+    assert run.execution_status == "success", run.error_message
+    assert run.generated_code and "df" in run.generated_code
+
+    # The answer's aggregate must match the COMBINED sum, not the single-file sum.
+    numbers = list(_load_key_numbers(run).values())
+    matched_combined = any(
+        _is_close(v, combined_sum, tol=max(1.0, abs(combined_sum) * 0.01)) for v in numbers
+    )
+    matched_single_only = any(
+        _is_close(v, single_sum, tol=max(1.0, abs(single_sum) * 0.001)) for v in numbers
+    ) and not matched_combined
+    assert matched_combined, (
+        f"Expected combined total ~{combined_sum} to appear in {numbers!r} "
+        f"(single-file total is {single_sum}); answer={run.answer_text!r}"
+    )
+    assert not matched_single_only, (
+        f"Answer reflected only the single-file total {single_sum}, not the "
+        f"combined {combined_sum}: {numbers!r}"
+    )
+
+
+def _is_close(value, target: float, tol: float) -> bool:
+    try:
+        return abs(float(value) - target) <= tol
+    except (TypeError, ValueError):
+        return False
+
+
+@pytest.mark.usefixtures("_require_gemini_key")
+def test_cleaning_question_returning_near_full_frame_resolves_in_single_pass(
+    _dataset_with_profile,
+):
+    """Regression (BLOCKER): a legitimate cleaning question whose result is a
+    near-full cleaned frame must resolve in ONE pass — success, step_count == 1,
+    with a bounded (capped) summary — instead of being hard-rejected by the
+    privacy boundary and burning retries. Real Gemini + real SQLite + real
+    sandbox against the 30-row fixture (> max_summary_rows)."""
+    from config.settings import get_settings
+
+    dataset_id, conversation_id = _dataset_with_profile
+    max_rows = get_settings().max_summary_rows
+
+    run_id = run_agent(
+        dataset_id,
+        conversation_id,
+        "Remove any rows with a missing amount and return all the remaining rows.",
+    )
+
+    with Session(session_module._engine) as s:
+        run = s.get(QueryRun, run_id)
+
+    assert run is not None
+    assert run.execution_status == "success", (
+        f"cleaning question should succeed in one pass, got "
+        f"{run.execution_status!r}; answer={run.answer_text!r}"
+    )
+    assert run.step_count == 1, f"expected a single pass, got step_count={run.step_count}"
+
+    # The persisted summary is bounded: never the full raw frame.
+    summary = run.result_summary_json
+    if isinstance(summary, dict):
+        assert _count_row_like_records(summary) <= max_rows
+        if summary.get("truncated"):
+            assert "data" not in summary
+            assert summary.get("row_count", 0) > max_rows
 
 
 @pytest.mark.usefixtures("_require_gemini_key")
@@ -283,7 +419,13 @@ def _count_row_like_records(summary) -> int:
         data = summary.get("data")
         if isinstance(data, list):
             return len(data)
-        # An aggregate (`.describe()`/`.value_counts()`) summary is not row-like.
+        # An aggregate summary carries a capped head `sample` (records) that is
+        # the only row-like data allowed above the cap — count it explicitly so
+        # the boundary is genuinely enforced.
+        sample = summary.get("sample")
+        if isinstance(sample, list):
+            return len(sample)
+        # A pure aggregate (`.describe()`/`.value_counts()`) is not row-like.
         return 0
     if isinstance(summary, list):
         return len(summary)

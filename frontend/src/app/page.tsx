@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import ProfileCard from '@/components/ProfileCard'
 import MessageBubble from '@/components/MessageBubble'
+import StepList from '@/components/StepList'
 import {
   ApiError,
+  addFileToDataset,
   askQuestion,
   createConversation,
+  exportDataset,
   getDataset,
   getMessages,
   uploadDataset,
@@ -26,6 +30,7 @@ export default function Home() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(true)
+  const [addingFile, setAddingFile] = useState(false)
 
   // --- Conversation / chat state ---
   const [conversationId, setConversationId] = useState<string | null>(null)
@@ -38,8 +43,11 @@ export default function Home() {
   const [question, setQuestion] = useState('')
   const [asking, setAsking] = useState(false)
   const [askError, setAskError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportMessage, setExportMessage] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const addFileInputRef = useRef<HTMLInputElement>(null)
   const threadEndRef = useRef<HTMLDivElement>(null)
 
   // Restore dataset/conversation from localStorage on load.
@@ -116,9 +124,39 @@ export default function Home() {
     }
   }
 
+  // Add another file to the current dataset and refresh the profile card
+  // to reflect the combined row count.
+  async function handleAddFile(file: File) {
+    if (!datasetInfo) return
+    if (!validExtension(file.name)) {
+      setUploadError("Couldn't read this file — make sure it's a valid CSV or Excel file under 100MB")
+      return
+    }
+    setAddingFile(true)
+    setUploadError(null)
+    try {
+      const result = await addFileToDataset(datasetInfo.dataset.id, file)
+      setDatasetInfo(result)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 0) {
+        setUploadError(err.message)
+      } else {
+        setUploadError("Couldn't add this file — make sure it's a valid CSV or Excel file under 100MB")
+      }
+    } finally {
+      setAddingFile(false)
+    }
+  }
+
   function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) handleFile(file)
+    e.target.value = ''
+  }
+
+  function onAddFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) handleAddFile(file)
     e.target.value = ''
   }
 
@@ -137,13 +175,13 @@ export default function Home() {
     return conversation.id
   }
 
-  async function handleAsk(e: React.FormEvent) {
-    e.preventDefault()
-    const trimmed = question.trim()
+  async function submitQuestion(text: string) {
+    const trimmed = text.trim()
     if (!trimmed || asking || !datasetInfo) return
 
     setAsking(true)
     setAskError(null)
+    setExportMessage(null)
     const pendingUserMessage: ChatMessage = {
       id: `pending-${Date.now()}`,
       role: 'user',
@@ -182,7 +220,45 @@ export default function Home() {
     }
   }
 
+  function handleAsk(e: React.FormEvent) {
+    e.preventDefault()
+    submitQuestion(question)
+  }
+
+  // The most recent successful query run backs the "Export cleaned data" action.
+  const lastSuccessfulRun = useMemo(() => {
+    const runs = Object.values(queryRuns).filter(r => r.execution_status === 'success')
+    return runs.length ? runs[runs.length - 1] : null
+  }, [queryRuns])
+
+  async function handleExport() {
+    if (!datasetInfo || !lastSuccessfulRun || exporting) return
+    setExporting(true)
+    setExportMessage(null)
+    try {
+      const { derived_dataset } = await exportDataset(
+        datasetInfo.dataset.id,
+        lastSuccessfulRun.id,
+      )
+      // Trigger a browser download from the returned download_url.
+      const a = document.createElement('a')
+      a.href = derived_dataset.download_url
+      a.download = derived_dataset.name
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setExportMessage(`Exported ${derived_dataset.name} (${derived_dataset.row_count.toLocaleString()} rows)`)
+    } catch (err) {
+      setExportMessage(
+        err instanceof ApiError ? err.message : 'Export failed — is the server running?',
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const hasDataset = !!datasetInfo
+  const canExport = hasDataset && !!lastSuccessfulRun
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -198,14 +274,13 @@ export default function Home() {
               {sessionTotals.cost.toFixed(4)}
             </span>
           )}
-          <button
-            type="button"
-            disabled
-            title="Audit trail — coming soon"
-            className="cursor-not-allowed rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-300"
+          <Link
+            href="/audit"
+            className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+            data-testid="audit-nav-link"
           >
-            Audit trail
-          </button>
+            View audit trail
+          </Link>
         </div>
       </header>
 
@@ -217,13 +292,13 @@ export default function Home() {
           className="relative rounded-lg border-2 border-dashed border-gray-300 bg-white p-6 text-center"
           data-testid="dropzone"
         >
-          {uploading && (
+          {(uploading || addingFile) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/80 text-sm text-gray-600">
               <span
                 className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
                 aria-hidden
               />
-              Profiling your data…
+              {addingFile ? 'Adding file and re-profiling…' : 'Profiling your data…'}
             </div>
           )}
 
@@ -234,6 +309,11 @@ export default function Home() {
           ) : (
             <p className="text-sm text-gray-500">
               Loaded <span className="font-medium text-gray-800">{datasetInfo.dataset.name}</span>
+              {datasetInfo.dataset.kind === 'multi_file' && (
+                <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-500">
+                  multi-file
+                </span>
+              )}
             </p>
           )}
 
@@ -244,22 +324,32 @@ export default function Home() {
               accept=".csv,.xlsx,.xls"
               className="hidden"
               onChange={onFileInputChange}
-              disabled={uploading}
+              disabled={uploading || addingFile}
               data-testid="file-input"
+            />
+            <input
+              ref={addFileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={onAddFileInputChange}
+              data-testid="add-file-input"
             />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={uploading || addingFile}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
             >
               Choose file
             </button>
             <button
               type="button"
-              disabled
-              title="Multi-file datasets — coming soon"
-              className="cursor-not-allowed rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-300"
+              onClick={() => addFileInputRef.current?.click()}
+              disabled={!hasDataset || uploading || addingFile}
+              title="Add another file to this dataset"
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid="add-file-button"
             >
               + Add another file
             </button>
@@ -289,18 +379,17 @@ export default function Home() {
               </p>
             )}
             {messages.map(m => (
-              <MessageBubble key={m.id} message={m} queryRun={queryRuns[m.id]} />
+              <MessageBubble
+                key={m.id}
+                message={m}
+                queryRun={queryRuns[m.id]}
+                onFollowUp={submitQuestion}
+              />
             ))}
 
             {asking && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-500 shadow-sm">
-                  <span
-                    className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"
-                    aria-hidden
-                  />
-                  Running analysis…
-                </div>
+                <StepList inFlight />
               </div>
             )}
 
@@ -334,15 +423,26 @@ export default function Home() {
             </button>
           </form>
 
-          <div className="mt-2">
+          <div className="mt-2 flex items-center gap-3">
             <button
               type="button"
-              disabled
-              title="Export cleaned data — coming soon"
-              className="cursor-not-allowed text-xs text-gray-300 underline decoration-dotted"
+              onClick={handleExport}
+              disabled={!canExport || exporting}
+              title={
+                canExport
+                  ? 'Export the cleaned/derived data from the latest answer'
+                  : 'Ask a question first to produce data to export'
+              }
+              className="text-xs font-medium text-blue-600 underline decoration-dotted hover:text-blue-800 disabled:cursor-not-allowed disabled:text-gray-300"
+              data-testid="export-button"
             >
-              Export cleaned data
+              {exporting ? 'Exporting…' : 'Export cleaned data'}
             </button>
+            {exportMessage && (
+              <span className="text-xs text-gray-500" data-testid="export-message">
+                {exportMessage}
+              </span>
+            )}
           </div>
         </section>
       )}

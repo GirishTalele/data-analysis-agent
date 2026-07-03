@@ -153,6 +153,7 @@ class QueryRun(Base):
     clarification_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     follow_up_suggestions_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     anomalies_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    result_table_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     estimated_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
@@ -163,3 +164,23 @@ class QueryRun(Base):
     )
 
     conversation: Mapped["Conversation"] = relationship(back_populates="query_runs")
+
+
+class DerivedDataset(Base):
+    """An exported/cleaned dataset produced from a QueryRun (spec/data.md#DerivedDataset)."""
+
+    __tablename__ = "derived_datasets"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True, default=_uuid)
+    source_dataset_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("datasets.id"), nullable=False
+    )
+    created_from_query_run_id: Mapped[str | None] = mapped_column(
+        Text, ForeignKey("query_runs.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    stored_path: Mapped[str] = mapped_column(Text, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, default=_now
+    )

@@ -42,6 +42,7 @@ class QueryRunResponse(BaseModel):
     key_numbers: dict | None = None
     follow_up_suggestions: list[str] = []
     anomalies: list[str] = []
+    result_table: dict | None = None
     step_count: int
     prompt_tokens: int
     completion_tokens: int

@@ -43,6 +43,11 @@ export type Conversation = {
   created_at?: string
 }
 
+export type ResultTable = {
+  columns: string[]
+  rows: unknown[][]
+}
+
 export type QueryRun = {
   id: string
   execution_status: 'success' | 'failed' | 'cannot_answer'
@@ -51,11 +56,31 @@ export type QueryRun = {
   key_numbers: Record<string, unknown>
   follow_up_suggestions: string[]
   anomalies: unknown[]
+  result_table: ResultTable | null
   step_count: number
   prompt_tokens: number
   completion_tokens: number
   estimated_cost_usd: number
   latency_ms: number
+  // Present on records returned by GET /query-runs (audit trail).
+  conversation_id?: string
+  dataset_id?: string
+  created_at?: string
+}
+
+export type DerivedDataset = {
+  id: string
+  name: string
+  row_count: number
+  download_url: string
+}
+
+export type CostSummary = {
+  scope: string
+  date?: string
+  total_tokens: number
+  total_cost_usd: number
+  query_count: number
 }
 
 export type ChatMessage = {
@@ -143,4 +168,66 @@ export async function askQuestion(conversationId: string, question: string): Pro
 
 export async function getMessages(conversationId: string): Promise<MessagesResponse> {
   return request<MessagesResponse>(`/conversations/${conversationId}/messages`)
+}
+
+// --- Phase 2 endpoints ---
+
+// Add another file to an existing dataset (folder-as-dataset). Returns the
+// updated {dataset, profile} with the combined row count.
+export async function addFileToDataset(
+  datasetId: string,
+  file: File,
+): Promise<DatasetWithProfile> {
+  const form = new FormData()
+  form.append('file', file)
+  return request<DatasetWithProfile>(`/datasets/${datasetId}/files`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+// Export a cleaned/derived dataset produced by a prior QueryRun.
+export async function exportDataset(
+  datasetId: string,
+  queryRunId: string,
+  name?: string,
+): Promise<{ derived_dataset: DerivedDataset }> {
+  return request<{ derived_dataset: DerivedDataset }>(`/datasets/${datasetId}/export`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query_run_id: queryRunId, name: name ?? 'cleaned_data.csv' }),
+  })
+}
+
+export type QueryRunFilters = {
+  dataset_id?: string
+  conversation_id?: string
+  execution_status?: string
+  from?: string
+  to?: string
+  limit?: number
+  offset?: number
+}
+
+// Browse the full audit trail across all conversations/datasets.
+export async function listQueryRuns(filters: QueryRunFilters = {}): Promise<QueryRun[]> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== null && value !== '') {
+      params.append(key, String(value))
+    }
+  }
+  const qs = params.toString()
+  const data = await request<{ query_runs: QueryRun[] }>(`/query-runs${qs ? `?${qs}` : ''}`)
+  return data.query_runs
+}
+
+// Running cost/token totals for the dashboard.
+export async function getCostSummary(
+  scope: 'session' | 'day' | 'all' = 'day',
+  conversationId?: string,
+): Promise<CostSummary> {
+  const params = new URLSearchParams({ scope })
+  if (conversationId) params.append('conversation_id', conversationId)
+  return request<CostSummary>(`/cost-summary?${params.toString()}`)
 }

@@ -182,7 +182,10 @@ def test_post_message_cannot_answer_returns_200_with_explanation(
     r = api_client.post(
         f"/conversations/{conversation_id}/messages",
         json={
-            "question": "What is the average of the 'nonexistent_column_xyz' column?"
+            # An answerable question (the `amount` column exists, so it passes
+            # the now-active check_clarity gate) whose sandbox execution is
+            # forced to fail — exercising the cannot_answer degradation path.
+            "question": "What is the total amount across all rows?"
         },
     )
     assert r.status_code == 200, r.text

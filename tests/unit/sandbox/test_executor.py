@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from sandbox.executor import ExecutionResult, run_code, summarize_for_llm
 
@@ -202,14 +201,27 @@ def test_summarize_small_list_and_dict_pass_through_unchanged():
     assert summarize_for_llm({"a": 1, "b": 2}) == {"a": 1, "b": 2}
 
 
-def test_summarize_rejects_raw_full_frame_passthrough():
-    df = pd.read_csv(FIXTURE_PATH)
-    # No aggregation in the "source code" and row count matches the full
-    # dataset -> this is the trivial "just return everything" case.
-    with pytest.raises(ValueError):
-        summarize_for_llm(
-            df, source_code="result = df.head(30)", full_row_count=FULL_ROW_COUNT
-        )
+def test_summarize_full_frame_passthrough_degrades_to_capped_summary():
+    """A near-full/full-frame result (e.g. a cleaning step that keeps most rows)
+    is NOT hard-rejected — it degrades to an aggregated, row-capped summary so
+    the cleaning question resolves in a single pass. The raw-row privacy
+    boundary still holds: only <= max_summary_rows rows ever surface, and the
+    full bulk of rows is never returned."""
+    from config.settings import get_settings
+
+    max_rows = get_settings().max_summary_rows
+    df = pd.read_csv(FIXTURE_PATH)  # 30 rows > max_summary_rows(20)
+    summary = summarize_for_llm(
+        df, source_code="result = df.dropna(subset=['amount'])", full_row_count=FULL_ROW_COUNT
+    )
+    # Aggregated success, not a rejection.
+    assert summary["truncated"] is True
+    assert summary["row_count"] == FULL_ROW_COUNT
+    assert "data" not in summary  # never the full raw frame
+    # The head sample is present but strictly capped at the boundary.
+    assert isinstance(summary["sample"], list)
+    assert len(summary["sample"]) <= max_rows
+    assert len(summary["sample"]) < FULL_ROW_COUNT  # bulk rows withheld
 
 
 def test_summarize_allows_full_length_result_when_aggregation_detected():

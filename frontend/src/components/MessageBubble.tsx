@@ -4,6 +4,9 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatMessage, QueryRun } from '@/lib/api'
+import SummaryTable from './SummaryTable'
+import Chart from './Chart'
+import StepList from './StepList'
 
 function formatCost(usd: number): string {
   return `$${usd.toFixed(4)}`
@@ -42,10 +45,45 @@ function CodeToggle({ code }: { code: string }) {
   )
 }
 
-function ChartStub() {
+function AnomalyBanner({ anomalies }: { anomalies: unknown[] }) {
+  if (!anomalies?.length) return null
   return (
-    <div className="mt-3 rounded-md border border-dashed border-gray-300 bg-gray-50 p-3 text-center text-xs text-gray-400">
-      Interactive charts — coming in a future update
+    <div
+      className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+      data-testid="anomaly-banner"
+    >
+      <div className="mb-1 font-semibold">Data-quality note</div>
+      <ul className="list-disc space-y-0.5 pl-4">
+        {anomalies.map((a, i) => (
+          <li key={i}>{typeof a === 'string' ? a : JSON.stringify(a)}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function FollowUpChips({
+  suggestions,
+  onFollowUp,
+}: {
+  suggestions: string[]
+  onFollowUp?: (question: string) => void
+}) {
+  if (!suggestions?.length) return null
+  return (
+    <div className="mt-3 flex flex-wrap gap-2" data-testid="follow-up-chips">
+      {suggestions.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onFollowUp?.(s)}
+          disabled={!onFollowUp}
+          className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          data-testid="follow-up-chip"
+        >
+          {s}
+        </button>
+      ))}
     </div>
   )
 }
@@ -53,13 +91,14 @@ function ChartStub() {
 export default function MessageBubble({
   message,
   queryRun,
+  onFollowUp,
 }: {
   message: ChatMessage
   queryRun?: QueryRun
+  onFollowUp?: (question: string) => void
 }) {
   const isUser = message.role === 'user'
   const isErrorRun = queryRun && queryRun.execution_status !== 'success'
-  const hasKeyNumbers = queryRun && Object.keys(queryRun.key_numbers ?? {}).length > 0
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -79,8 +118,16 @@ export default function MessageBubble({
 
         {queryRun && queryRun.execution_status === 'success' && (
           <>
+            <StepList stepCount={queryRun.step_count} />
+            {/* Order per spec/ui.md: key numbers (in prose) -> table -> chart -> code. */}
+            <SummaryTable table={queryRun.result_table} />
+            <Chart queryRun={queryRun} />
             {queryRun.generated_code && <CodeToggle code={queryRun.generated_code} />}
-            {hasKeyNumbers && <ChartStub />}
+            <AnomalyBanner anomalies={queryRun.anomalies} />
+            <FollowUpChips
+              suggestions={queryRun.follow_up_suggestions}
+              onFollowUp={onFollowUp}
+            />
             <div className="mt-2">
               <CostBadge queryRun={queryRun} />
             </div>

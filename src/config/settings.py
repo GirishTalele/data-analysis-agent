@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     sandbox_timeout_seconds: int = Field(default=20)
     max_summary_rows: int = Field(default=20)
     max_summary_items: int = Field(default=50)
-    max_steps: int = Field(default=1)
+    max_steps: int = Field(default=5)
     gemini_input_price_per_1m: float = Field(default=1.25)
     gemini_output_price_per_1m: float = Field(default=5.00)
     # NOTE: attribute name already starts with "agent_" so env_prefix would otherwise

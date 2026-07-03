@@ -31,6 +31,7 @@ Chat-style web interface (single page, served at `http://localhost:8001/app/`), 
 
 **Key elements:**
 - Message thread: user question bubbles (right-aligned) and assistant answer bubbles (left-aligned), rendered through a markdown renderer (never raw text) so numbered lists / bold key numbers render correctly.
+- **SummaryTable component (Phase 2):** rendered inside the assistant answer bubble, positioned between the key numbers and the chart. Displays the `query_run.result_table` (`{columns, rows}` from `spec/api.md`) as a plain HTML `<table>` (column headers from `columns`, one `<tr>` per entry in `rows`). Absent entirely when `result_table` is `null` (scalar-only answers). It renders alongside the interactive chart (built by the `frontend-step-list-and-charts` slice) and the existing "View code" disclosure — the three are complementary views of the same answer.
 - "View code" collapsible toggle under each assistant message — expands to show the exact pandas code that ran, monospace, syntax-formatted.
 - Per-message cost/token badge, e.g. `908 tokens · $0.0016`, next to each assistant message.
 - A pinned header badge showing the running session total (tokens + estimated cost) across the whole conversation.

@@ -22,13 +22,13 @@
 
 | Agent / Node | Provider | Model ID | Rationale |
 |-------------|----------|----------|-----------|
-| `check_clarity` | Gemini | `gemini-3.1-pro` (via `AGENT_LLM_MODEL`) | Small classification call; quality matters more than latency since a wrong "clear" verdict wastes a full code-gen/execute round trip. |
-| `generate_code` | Gemini | `gemini-3.1-pro` | Code generation needs the strongest available reasoning to write correct pandas against an arbitrary schema. |
-| `compose_answer` | Gemini | `gemini-3.1-pro` | Narration quality (correct numbers, clear language, Phase-2 follow-ups/anomalies) matters most here. |
+| `check_clarity` | Gemini | `gemini-3.1-pro-preview` (via `AGENT_LLM_MODEL`) | Small classification call; quality matters more than latency since a wrong "clear" verdict wastes a full code-gen/execute round trip. |
+| `generate_code` | Gemini | `gemini-3.1-pro-preview` | Code generation needs the strongest available reasoning to write correct pandas against an arbitrary schema. |
+| `compose_answer` | Gemini | `gemini-3.1-pro-preview` | Narration quality (correct numbers, clear language, Phase-2 follow-ups/anomalies) matters most here. |
 
 **Fallback behaviour:** on a Gemini API error (rate limit, 5xx, timeout), the calling node catches the SDK exception, sets `state["error"]`, and routes to `handle_error`, which records `status=failed` with a human-readable `error_message` on the `QueryRun` row. No retry-with-backoff in Phase 1 (single local user, low volume); Phase 2 may add one retry with backoff for transient 5xx/timeout errors specifically — a permanent guardrail, not a test/offline stub path.
 
-**Prompt strategy:** system/user split via `.md` templates in `src/prompts/`. `generate_code.md` (system) + a user message built from `schema_context` + `question` (+ prior `execution_error` on a retry). `compose_answer.md` (system, requests structured JSON: `{"answer": str, "key_numbers": {...}}` in Phase 1; `{"answer": str, "key_numbers": {...}, "follow_up_suggestions": [str], "anomalies": [str]}` in Phase 2) + a user message built from `schema_context` + the *summarized* execution result.
+**Prompt strategy:** system/user split via `.md` templates in `src/prompts/`. `generate_code.md` (system) + a user message built from `schema_context` + `question` (+ prior `execution_error` on a retry). `compose_answer.md` (system, requests structured JSON: `{"answer": str, "key_numbers": {...}}` in Phase 1; `{"answer": str, "key_numbers": {...}, "follow_up_suggestions": [str], "anomalies": [str], "result_table": {"columns": [str], "rows": [[cell]]} | null}` in Phase 2) + a user message built from `schema_context` + the *summarized* execution result.
 
 ---
 
@@ -78,6 +78,7 @@ class AgentState(TypedDict, total=False):
     key_numbers: dict | None
     follow_up_suggestions: list[str]     # [P2 activates] always [] in Phase 1
     anomalies: list[str]                 # [P2 activates] always [] in Phase 1
+    result_table: dict | None            # [P2 activates] {"columns":[...], "rows":[...]}; None in Phase 1 and for scalar-only answers
 
     # Cost / audit
     prompt_tokens: int
@@ -141,10 +142,10 @@ Reads `needs_clarification`, `execution_error`, `step_count`, `max_steps` and re
 ### `compose_answer` **[P1 active, minimal fields; P2 adds follow-ups/anomalies]**
 
 **Reads from state:** `question`, `schema_context`, `execution_result` (summarized)
-**Writes to state:** `answer_text`, `key_numbers`, `follow_up_suggestions` (Phase 1: `[]`), `anomalies` (Phase 1: `[]`), `prompt_tokens` (+=), `completion_tokens` (+=), `status="success"`
+**Writes to state:** `answer_text`, `key_numbers`, `follow_up_suggestions` (Phase 1: `[]`), `anomalies` (Phase 1: `[]`), `result_table` (Phase 1: `None`), `prompt_tokens` (+=), `completion_tokens` (+=), `status="success"`
 **LLM call:** yes — `src/prompts/compose_answer.md`, structured JSON output.
 **External calls:** Gemini → `handle_error` on SDK exception.
-**Behaviour:** Turns the summarized result into a plain-language answer naming the key number(s). Phase 2 additionally asks for 2-3 follow-up questions and any anomalies noticed in the schema/stats/result (e.g. a suspicious spike, a column that's mostly null).
+**Behaviour:** Turns the summarized result into a plain-language answer naming the key number(s). Phase 2 additionally asks for 2-3 follow-up questions and any anomalies noticed in the schema/stats/result (e.g. a suspicious spike, a column that's mostly null). Phase 2 also emits `result_table` — a structured `{"columns": [...], "rows": [...]}` summary table derived from the *summarized* execution result (a dict/records or `.describe()` output) when the answer is a tabular/breakdown (e.g. a groupby), and `null` for scalar-only answers. `result_table` is built only from the already-summarized result — it reuses the existing raw-row privacy boundary and must never exceed `AGENT_MAX_SUMMARY_ROWS` rows (never bypasses `summarize_for_llm`; see `spec/architecture.md` → Raw-Row Privacy Boundary). Persisted to `QueryRun.result_table_json`.
 
 ### `ask_clarification` **[P1: wired but unreachable; P2 activates]**
 

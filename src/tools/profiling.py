@@ -98,6 +98,21 @@ def profile_file(path: str | Path, file_type: str) -> dict[str, Any]:
     return profile_dataframe(df)
 
 
+def profile_files(specs: list[tuple[str | Path, str]]) -> dict[str, Any]:
+    """Load MULTIPLE files, concatenate them, and profile the unioned frame.
+
+    `specs` is a list of `(path, file_type)`. The returned `row_count` is the
+    TOTAL across all files (spec/data.md#DatasetProfile.row_count) — this is the
+    core Phase-2 multi-file win: an aggregate is computed over the full combined
+    data, not one file. Raises ProfilingError if any file is unreadable.
+    """
+    if not specs:
+        raise ProfilingError("Cannot profile a dataset with no backing files.")
+    frames = [load_dataframe(path, file_type) for path, file_type in specs]
+    combined = frames[0] if len(frames) == 1 else pd.concat(frames, ignore_index=True)
+    return profile_dataframe(combined)
+
+
 def _to_jsonable(value: Any) -> Any:
     """Coerce a single sample value (possibly a numpy scalar) to a JSON-safe primitive."""
     try:

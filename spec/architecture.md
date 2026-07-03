@@ -111,7 +111,7 @@ data/
 
 - **Language:** Python 3.12+ (backend/agent), TypeScript (frontend) — matches the existing skeleton.
 - **Agent framework:** LangGraph — a ReAct-style loop (see `spec/agent.md`); the skeleton's `StateGraph` wiring is extended in place, not replaced.
-- **LLM provider + model:** Google Gemini via `google-genai`, model `gemini-3.1-pro` (already wired as `GeminiProvider` in `src/llm/providers/gemini.py`; the default provider is auto-selected from `AGENT_GEMINI_API_KEY` being set, per `src/llm/client.py`'s existing `_make_provider()`). Configurable via `AGENT_LLM_MODEL`.
+- **LLM provider + model:** Google Gemini via `google-genai`, model `gemini-3.1-pro-preview` (the live-verified model id; already wired as `GeminiProvider.DEFAULT_MODEL` in `src/llm/providers/gemini.py`; the default provider is auto-selected from `AGENT_GEMINI_API_KEY` being set, per `src/llm/client.py`'s existing `_make_provider()`). Configurable via `AGENT_LLM_MODEL`.
 - **Backend:** FastAPI (existing skeleton), served at port 8001.
 - **Database + ORM:** SQLite (`data/agent.db`) + SQLAlchemy 2.0 declarative models + Alembic migrations. SQLite is the correct choice here (not an assumption to override) because this is an explicitly local, single-user tool per `spec/roadmap.md`.
 - **Frontend:** Next.js 15 + React 19, static export served by FastAPI at `/app` (existing skeleton pattern) — Tailwind for styling.

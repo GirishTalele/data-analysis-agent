@@ -5,6 +5,8 @@ from graph.state import AgentState
 
 
 def after_clarity(state: AgentState) -> str:
+    if state.get("error"):
+        return "handle_error"
     if state.get("needs_clarification"):
         return "ask_clarification"
     return "generate_code"

@@ -88,6 +88,7 @@ REST (FastAPI), envelope pattern per the existing skeleton (`ok(data)` / `api_er
       "key_numbers": { "average_amount": 88.4 },
       "follow_up_suggestions": [],
       "anomalies": [],
+      "result_table": null,
       "step_count": 1,
       "prompt_tokens": 812,
       "completion_tokens": 96,
@@ -98,6 +99,15 @@ REST (FastAPI), envelope pattern per the existing skeleton (`ok(data)` / `api_er
   "error": null
 }
 ```
+
+**`result_table` field (Phase 2):** the `query_run` object also carries `result_table`, shape `{ "columns": [...], "rows": [...] } | null`, the structured summary table backing a tabular/breakdown answer (maps to `QueryRun.result_table_json` in `spec/data.md`). It is `null` for scalar-only answers and always `null` in Phase 1. It is AGGREGATED/DERIVED output, never raw source rows, and never exceeds `AGENT_MAX_SUMMARY_ROWS` rows. Example — for "average revenue by region":
+```json
+"result_table": {
+  "columns": ["region", "avg_revenue"],
+  "rows": [["North", 88.4], ["South", 74.1], ["East", 91.2], ["West", 60.5]]
+}
+```
+This same `result_table` field also appears on each `QueryRun` record returned by `GET /query-runs`.
 
 **Error cases:**
 | Status | Condition |
@@ -176,7 +186,7 @@ REST (FastAPI), envelope pattern per the existing skeleton (`ok(data)` / `api_er
 
 **Query params:** `dataset_id`, `conversation_id`, `from`, `to`, `execution_status` (all optional filters), `limit`, `offset`.
 
-**Response:** paginated list of `QueryRun` records (same shape as in `POST /conversations/{id}/messages`).
+**Response:** paginated list of `QueryRun` records (same shape as the `query_run` object in `POST /conversations/{id}/messages`, including the `result_table` field).
 
 ### `GET /cost-summary`
 

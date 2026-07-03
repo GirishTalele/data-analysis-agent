@@ -19,6 +19,7 @@ from observability.events import get_logger
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 _GENERATE_CODE_PROMPT_PATH = _PROMPTS_DIR / "generate_code.md"
 _COMPOSE_ANSWER_PROMPT_PATH = _PROMPTS_DIR / "compose_answer.md"
+_CHECK_CLARITY_PROMPT_PATH = _PROMPTS_DIR / "check_clarity.md"
 
 _logger = get_logger("graph.nodes")
 
@@ -81,6 +82,45 @@ def _build_generate_code_user_message(state: AgentState) -> str:
     return "\n".join(str(p) for p in parts)
 
 
+def _build_check_clarity_user_message(state: AgentState) -> str:
+    payload = {
+        "question": state.get("question", ""),
+        "schema_context": state.get("schema_context") or {},
+    }
+    return json.dumps(payload, indent=2, default=str)
+
+
+def _sanitize_result_table(raw: Any, max_rows: int) -> dict | None:
+    """Validate + cap a model-produced result_table.
+
+    Reuses the raw-row privacy boundary: the table is derived from the
+    already-summarized execution result, and here we hard-cap the number of
+    rows to `max_rows` (AGENT_MAX_SUMMARY_ROWS) so it can never exceed the
+    boundary even if the model over-produces. Returns None for anything that
+    isn't a well-formed {"columns": [...], "rows": [[...]]} object.
+    """
+    if not isinstance(raw, dict):
+        return None
+    columns = raw.get("columns")
+    rows = raw.get("rows")
+    if not isinstance(columns, list) or not columns:
+        return None
+    if not isinstance(rows, list):
+        return None
+    clean_rows: list[list[Any]] = []
+    for row in rows[:max_rows]:
+        if isinstance(row, list):
+            clean_rows.append(row)
+        elif isinstance(row, dict):
+            # tolerate a records-shaped row -> project onto columns order
+            clean_rows.append([row.get(c) for c in columns])
+        else:
+            clean_rows.append([row])
+    if not clean_rows:
+        return None
+    return {"columns": [str(c) for c in columns], "rows": clean_rows}
+
+
 def _build_compose_answer_user_message(state: AgentState) -> str:
     payload = {
         "question": state.get("question", ""),
@@ -96,13 +136,40 @@ def _build_compose_answer_user_message(state: AgentState) -> str:
 
 
 def check_clarity(state: AgentState) -> AgentState:
-    """Phase 1 stub — always proceeds straight through (never asks for clarification)."""
-    return {
-        **state,
-        "clarity_checked": True,
-        "needs_clarification": False,
-        "clarification_question": None,
-    }
+    """[P2 active] Real Gemini classification — is the question answerable given
+    the schema? If not, set `needs_clarification=True` + a `clarification_question`
+    so the graph routes to `ask_clarification`. On an LLM error, set `state["error"]`
+    so the graph routes to `handle_error` (never crashes the turn)."""
+    try:
+        system_prompt = _load_prompt(_CHECK_CLARITY_PROMPT_PATH)
+        user_message = _build_check_clarity_user_message(state)
+        response = LLMClient().call_model_with_usage(user_message, system=system_prompt)
+        parsed = _parse_json_object(response.text)
+        # Permissive default: treat as answerable unless the model clearly says no.
+        answerable = parsed.get("answerable", True)
+        clarification_question = parsed.get("clarification_question")
+        needs_clarification = answerable is False and bool(clarification_question)
+        _logger.info(
+            "check_clarity",
+            trace_id=state.get("run_id"),
+            node="check_clarity",
+            needs_clarification=needs_clarification,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
+        )
+        return {
+            **state,
+            "clarity_checked": True,
+            "needs_clarification": needs_clarification,
+            "clarification_question": clarification_question if needs_clarification else None,
+            "prompt_tokens": state.get("prompt_tokens", 0) + response.prompt_tokens,
+            "completion_tokens": state.get("completion_tokens", 0) + response.completion_tokens,
+        }
+    except Exception as exc:  # SDK/network/auth failures -> fatal, route to handle_error
+        _logger.error(
+            "check_clarity_failed", trace_id=state.get("run_id"), node="check_clarity", error=str(exc)
+        )
+        return {**state, "clarity_checked": True, "error": f"check_clarity failed: {exc}"}
 
 
 # ---------------------------------------------------------------------------
@@ -147,28 +214,34 @@ def execute_code(state: AgentState) -> AgentState:
     from db.models import DatasetFile
     from db.session import create_db_session
     from sandbox.executor import run_code
+    from tools.storage import file_specs_from_rows, resolve_execution_source
 
+    dataset_id = state["dataset_id"]
     try:
         with create_db_session() as session:
-            file_row = (
+            rows = (
                 session.query(DatasetFile)
-                .filter(DatasetFile.dataset_id == state["dataset_id"])
-                .order_by(DatasetFile.uploaded_at.desc())
-                .first()
+                .filter(DatasetFile.dataset_id == dataset_id)
+                .order_by(DatasetFile.uploaded_at.asc())
+                .all()
             )
-            if file_row is None:
-                stored_path, file_type = None, None
-            else:
-                # Extract while still attached — the session commits (and
-                # expires instances) on context-manager exit.
-                stored_path, file_type = file_row.stored_path, file_row.file_type
+            # Capture specs while the session is open (instances expire on exit).
+            specs = file_specs_from_rows(rows)
     except Exception as exc:
         return {**state, "error": f"Failed to look up dataset file: {exc}"}
 
-    if stored_path is None:
-        return {**state, "error": f"No file found for dataset {state.get('dataset_id')!r}."}
+    if not specs:
+        return {**state, "error": f"No file found for dataset {dataset_id!r}."}
 
-    dataset_path = Path(get_settings().data_dir) / stored_path
+    # Resolve ALL backing files to a single execution source: the file itself
+    # for single-file datasets, or a materialized combined CSV for multi-file
+    # datasets (spec/roadmap.md Phase-2 win) — the sandbox stays unchanged.
+    try:
+        dataset_path, file_type = resolve_execution_source(
+            get_settings().data_dir, specs, dataset_id
+        )
+    except Exception as exc:
+        return {**state, "error": f"Failed to resolve dataset files: {exc}"}
     if not dataset_path.exists():
         return {**state, "error": f"Dataset file is missing on disk: {dataset_path}"}
 
@@ -200,19 +273,15 @@ def observe_result(state: AgentState) -> AgentState:
     schema_context = state.get("schema_context") or {}
     full_row_count = schema_context.get("row_count")
 
-    try:
-        summary = summarize_for_llm(
-            state.get("execution_result"),
-            source_code=state.get("generated_code") or "",
-            full_row_count=full_row_count,
-        )
-        return {**state, "execution_result": summary}
-    except ValueError as exc:
-        # Raw-row-passthrough rejection -> treat as a non-fatal execution_error.
-        _logger.warning(
-            "observe_result_rejected", trace_id=state.get("run_id"), node="observe_result", error=str(exc)
-        )
-        return {**state, "execution_result": None, "execution_error": str(exc)}
+    # summarize_for_llm enforces the raw-row privacy boundary and always returns
+    # a bounded summary (a large/near-full cleaned frame is aggregated + capped,
+    # NOT rejected) so a legitimate cleaning result resolves in a single pass.
+    summary = summarize_for_llm(
+        state.get("execution_result"),
+        source_code=state.get("generated_code") or "",
+        full_row_count=full_row_count,
+    )
+    return {**state, "execution_result": summary}
 
 
 # ---------------------------------------------------------------------------
@@ -226,19 +295,27 @@ def compose_answer(state: AgentState) -> AgentState:
         user_message = _build_compose_answer_user_message(state)
         response = LLMClient().call_model_with_usage(user_message, system=system_prompt)
         parsed = _parse_json_object(response.text)
+        from config.settings import get_settings
+
+        max_rows = getattr(get_settings(), "max_summary_rows", 20)
+        follow_ups = parsed.get("follow_up_suggestions")
+        anomalies = parsed.get("anomalies")
+        result_table = _sanitize_result_table(parsed.get("result_table"), max_rows)
         _logger.info(
             "compose_answer",
             trace_id=state.get("run_id"),
             node="compose_answer",
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
+            has_result_table=result_table is not None,
         )
         return {
             **state,
             "answer_text": parsed.get("answer") or "",
             "key_numbers": parsed.get("key_numbers") or {},
-            "follow_up_suggestions": [],
-            "anomalies": [],
+            "follow_up_suggestions": [str(s) for s in follow_ups] if isinstance(follow_ups, list) else [],
+            "anomalies": [str(a) for a in anomalies] if isinstance(anomalies, list) else [],
+            "result_table": result_table,
             "prompt_tokens": state.get("prompt_tokens", 0) + response.prompt_tokens,
             "completion_tokens": state.get("completion_tokens", 0) + response.completion_tokens,
             "status": "success",

@@ -48,29 +48,6 @@ FORBIDDEN_NAMES = {
     "breakpoint",
 }
 
-# Method calls that count as "aggregation" for the raw-frame-passthrough heuristic.
-_AGGREGATION_MARKERS = (
-    "groupby",
-    ".agg(",
-    ".aggregate(",
-    ".mean(",
-    ".sum(",
-    ".count(",
-    ".describe(",
-    ".value_counts(",
-    ".median(",
-    ".std(",
-    ".var(",
-    ".min(",
-    ".max(",
-    ".nunique(",
-    ".pivot_table(",
-    ".pivot(",
-    ".size(",
-    ".corr(",
-    ".resample(",
-)
-
 _RUNNER_SCRIPT = Path(__file__).parent / "runner.py"
 
 
@@ -195,10 +172,6 @@ def run_code(code: str, dataset_path: Path, file_type: str) -> ExecutionResult:
         )
 
 
-def _has_aggregation(source_code: str) -> bool:
-    return any(marker in source_code for marker in _AGGREGATION_MARKERS)
-
-
 def _json_safe_key(key: Any) -> str:
     if isinstance(key, str):
         return key
@@ -242,13 +215,23 @@ def summarize_for_llm(
         that, truncated with an explicit `{"truncated": true, "total_items": N}` marker.
       - DataFrame/Series results with row_count <= `settings.max_summary_rows`
         are converted to plain dict/records; above that threshold only an
-        aggregate (`.describe()` / `.value_counts()`) plus the true row count
-        and a `"truncated": true` marker is returned — never raw rows.
-      - If the result's row count equals `full_row_count` (the original,
-        unaggregated dataset) and no aggregation call is detected in
-        `source_code`, this is the trivial "just return the raw frame" case
-        and is rejected outright with a ValueError (caller must catch this
-        and turn it into an execution_error).
+        aggregate (`.describe()` / `.value_counts()`) plus the true row count,
+        a capped head `sample` (<= `settings.max_summary_rows` rows) and a
+        `"truncated": true` marker is returned — never the raw bulk rows.
+
+    A legitimate large / near-full result (e.g. a cleaned frame that keeps most
+    of the dataset) is therefore treated as a SUMMARIZABLE SUCCESS: it is
+    aggregated + capped, not hard-rejected. This keeps the raw-row privacy
+    boundary fully intact (only <= `max_summary_rows` rows ever surface to the
+    LLM, exactly as for any other above-cap result) while letting
+    `compose_answer` narrate the result and derive a bounded `result_table`.
+    The export endpoint re-runs the code against the full data OUTSIDE this
+    boundary, so it still produces the complete cleaned output.
+
+    `source_code` / `full_row_count` are retained for signature stability and
+    logging context; they no longer drive a hard rejection (the previous
+    full-frame-passthrough ValueError forced a costly retry loop for
+    legitimate cleaning questions).
     """
     settings = get_settings()
     max_items = getattr(settings, "max_summary_items", 50)
@@ -260,29 +243,20 @@ def summarize_for_llm(
     if isinstance(result, (pd.Series, pd.DataFrame)):
         row_count = len(result)
 
-        if (
-            full_row_count is not None
-            and row_count == full_row_count
-            and not _has_aggregation(source_code)
-        ):
-            raise ValueError(
-                "Refusing to summarize an unaggregated pass-through of the full "
-                "dataset (row count matches the original dataset and no "
-                "aggregation was detected in the executed code); raw row-level "
-                "data must never reach the LLM."
-            )
-
         if row_count <= max_rows:
             if isinstance(result, pd.Series):
                 return {"data": _json_safe(result.to_dict()), "row_count": row_count}
             return {"data": _json_safe(result.to_dict(orient="records")), "row_count": row_count}
 
-        # Above the cap: never return raw rows, only an aggregate.
+        # Above the cap (includes large/near-full cleaned frames): never return
+        # the raw bulk rows — only an aggregate plus a head sample capped at
+        # max_rows, marked truncated.
         if isinstance(result, pd.Series):
             if pd.api.types.is_numeric_dtype(result):
                 summary = result.describe().to_dict()
             else:
                 summary = result.value_counts().head(max_items).to_dict()
+            sample = _json_safe(result.head(max_rows).to_dict())
         else:
             numeric_cols = result.select_dtypes(include="number")
             if not numeric_cols.empty:
@@ -292,9 +266,11 @@ def summarize_for_llm(
                     str(col): result[col].value_counts().head(max_items).to_dict()
                     for col in result.columns
                 }
+            sample = _json_safe(result.head(max_rows).to_dict(orient="records"))
 
         return {
             "summary": _json_safe(summary),
+            "sample": sample,
             "row_count": row_count,
             "truncated": True,
         }

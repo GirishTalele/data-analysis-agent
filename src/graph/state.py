@@ -33,6 +33,7 @@ class AgentState(TypedDict, total=False):
     key_numbers: dict | None
     follow_up_suggestions: list[str]     # [P2 activates] always [] in Phase 1
     anomalies: list[str]                 # [P2 activates] always [] in Phase 1
+    result_table: dict | None            # [P2 activates] {"columns":[...],"rows":[...]}; None for scalar answers
 
     # Cost / audit
     prompt_tokens: int

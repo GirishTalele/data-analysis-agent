@@ -38,7 +38,11 @@ def _build_graph() -> StateGraph:
     g.add_conditional_edges(
         "check_clarity",
         after_clarity,
-        {"ask_clarification": "ask_clarification", "generate_code": "generate_code"},
+        {
+            "ask_clarification": "ask_clarification",
+            "generate_code": "generate_code",
+            "handle_error": "handle_error",
+        },
     )
     g.add_conditional_edges(
         "generate_code",
@@ -54,7 +58,7 @@ def _build_graph() -> StateGraph:
         "observe_result",
         after_observe_result,
         {
-            "generate_code": "generate_code",  # loop-back — inert while max_steps=1
+            "generate_code": "generate_code",  # loop-back — active in Phase 2 (max_steps=5)
             "cannot_answer": "cannot_answer",
             "compose_answer": "compose_answer",
         },

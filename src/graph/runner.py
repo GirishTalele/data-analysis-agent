@@ -92,6 +92,7 @@ def run_agent(dataset_id: str, conversation_id: str, question: str) -> str:
         "key_numbers": None,
         "follow_up_suggestions": [],
         "anomalies": [],
+        "result_table": None,
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "estimated_cost_usd": 0.0,
@@ -134,6 +135,7 @@ def run_agent(dataset_id: str, conversation_id: str, question: str) -> str:
         run.clarification_question = final_state.get("clarification_question")
         run.follow_up_suggestions_json = final_state.get("follow_up_suggestions") or []
         run.anomalies_json = final_state.get("anomalies") or []
+        run.result_table_json = final_state.get("result_table")
         run.prompt_tokens = prompt_tokens
         run.completion_tokens = completion_tokens
         run.estimated_cost_usd = estimated_cost_usd
