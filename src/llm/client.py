@@ -1,4 +1,15 @@
+from dataclasses import dataclass
+
 from config.settings import get_settings
+
+
+@dataclass
+class LLMResponse:
+    """Result of an LLM call including token usage (for cost accounting)."""
+
+    text: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 def _make_provider():
@@ -33,3 +44,15 @@ class LLMClient:
 
     def call_model(self, prompt: str, *, system: str | None = None) -> str:
         return self._provider.call_model(prompt, system=system)
+
+    def call_model_with_usage(self, prompt: str, *, system: str | None = None) -> LLMResponse:
+        """Like `call_model` but also returns prompt/completion token counts.
+
+        Providers that don't expose usage (e.g. the Anthropic provider, not yet
+        extended) fall back to zero token counts rather than failing — cost
+        accounting degrades gracefully instead of blocking the call.
+        """
+        if hasattr(self._provider, "call_model_with_usage"):
+            return self._provider.call_model_with_usage(prompt, system=system)
+        text = self._provider.call_model(prompt, system=system)
+        return LLMResponse(text=text)
