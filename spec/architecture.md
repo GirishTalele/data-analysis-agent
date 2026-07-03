@@ -124,7 +124,7 @@ data/
 |-------------|---------|---------|
 | `pandas` | >=2.2 | Profiling + sandboxed code execution |
 | `openpyxl` | >=3.1 | `.xlsx` read support for pandas |
-| `pyqvd` | >=1.0 | `.qvd` (QlikView) → `pandas.DataFrame` read support (Phase 3); pure-Python, must import in the sandbox subprocess |
+| `pyqvd` | >=2.3.2 | `.qvd` (QlikView) → `pandas.DataFrame` read support (Phase 3); pure-Python, must import in the sandbox subprocess |
 | `google-genai` | >=2.9.0 (existing) | Gemini SDK |
 | `langgraph` | >=0.1 (existing) | Reasoning-loop graph |
 | `python-multipart` | >=0.0.9 | FastAPI file upload parsing |
