@@ -64,6 +64,12 @@ def _load_dataframe(dataset_path: str, file_type: str) -> pd.DataFrame:
         return pd.read_csv(dataset_path)
     if normalized in ("xlsx", "xls", "excel"):
         return pd.read_excel(dataset_path)
+    if normalized == "qvd":
+        # Isolated-subprocess safe: pyqvd is a normal runtime dependency, so
+        # ``sys.executable`` (this process) can import it.
+        from pyqvd import QvdTable
+
+        return QvdTable.from_qvd(str(dataset_path)).to_pandas()
     raise ValueError(f"Unsupported file_type '{file_type}'")
 
 

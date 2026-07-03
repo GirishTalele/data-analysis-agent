@@ -2,14 +2,14 @@
 
 ## What It Does
 
-Accepts an uploaded CSV/Excel file (Phase 2: multiple files or a folder treated as one dataset), stores it locally, and immediately auto-profiles it — columns, dtypes, row count, missing values — without the user having to ask.
+Accepts an uploaded CSV/Excel/QVD file (Phase 2: multiple files or a folder treated as one dataset), stores it locally, and immediately auto-profiles it — columns, dtypes, row count, missing values — without the user having to ask.
 
 ## Inputs
 
 | Input | Type | Source | Required |
 |-------|------|--------|----------|
-| File upload | `.csv` / `.xlsx` / `.xls`, ≤ `AGENT_MAX_UPLOAD_MB` | `POST /datasets` (multipart) | yes |
-| Additional file (Phase 2) | same | `POST /datasets/{id}/files` | no |
+| File upload | `.csv` / `.xlsx` / `.xls` / `.qvd`, ≤ `AGENT_MAX_UPLOAD_MB` | `POST /datasets` (multipart) | yes |
+| Additional file (Phase 2/3) | same (incl. `.qvd`) | `POST /datasets/{id}/files` | no |
 | Join spec (Phase 2) | `{dataset_ids, join_on, how}` | `POST /datasets/join` | no |
 
 ## Outputs
@@ -30,6 +30,7 @@ Accepts an uploaded CSV/Excel file (Phase 2: multiple files or a folder treated 
 ## Business Rules
 
 - Profiling happens synchronously on upload — the user never has to click "profile" separately.
+- QVD files (`.qvd`, QlikView's proprietary binary columnar format) are read locally into a `pandas.DataFrame` via the pure-Python `pyqvd` reader (see `spec/architecture.md` → Stack); once loaded they profile, are queried, joined, and exported through exactly the same code paths as a CSV. Parsing is entirely local (no Qlik runtime, no external service): the raw QVD rows never leave the pandas process — only the aggregated `columns_json` is ever eligible to reach the LLM, identical to the CSV boundary above.
 - Profiling never sends the file contents anywhere except the local pandas process; only the resulting `columns_json` (aggregated stats) is ever eligible to reach the LLM (see `spec/architecture.md` → Raw-Row Privacy Boundary).
 - Phase 1: exactly one file per dataset (`kind="single_file"`). Phase 2: adding a file re-profiles the whole dataset over the unioned data (`kind="multi_file"`); a join creates a new dataset (`kind="joined"`) profiled over the joined result.
 - A dataset's profile history is retained (new `DatasetProfile` rows, not overwrites) so the audit trail can show the schema as of any given query.
@@ -38,4 +39,5 @@ Accepts an uploaded CSV/Excel file (Phase 2: multiple files or a folder treated 
 
 - [ ] Uploading a valid CSV returns a profile whose `row_count`, `column_count`, and per-column `missing_count` exactly match values independently computed from the same file with pandas.
 - [ ] Uploading an unsupported file type or a file over `AGENT_MAX_UPLOAD_MB` returns a `400` with a human-readable message, and no `Dataset` row is created.
+- [ ] (Phase 3) Uploading a valid `.qvd` file returns a profile whose `row_count`, `column_count`, and per-column `missing_count` exactly match values independently computed from the same QVD read with `pyqvd`, and a subsequent aggregate question answers correctly using real pandas execution against the loaded frame.
 - [ ] (Phase 2) Adding a second file to a dataset updates `row_count` to the sum of both files' rows, and a subsequent aggregate question answers using both files' data (verified against a fixture large enough that a sampled answer would differ from the full-data answer).

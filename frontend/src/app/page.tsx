@@ -22,7 +22,7 @@ import {
 const DATASET_KEY = 'agent.datasetId'
 const CONVERSATION_KEY = 'agent.conversationId'
 
-const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.xls']
+const ACCEPTED_EXTENSIONS = ['.csv', '.xlsx', '.xls', '.qvd']
 
 export default function Home() {
   // --- Upload / profile state ---
@@ -94,7 +94,7 @@ export default function Home() {
 
   async function handleFile(file: File) {
     if (!validExtension(file.name)) {
-      setUploadError("Couldn't read this file — make sure it's a valid CSV or Excel file under 100MB")
+      setUploadError("Couldn't read this file — make sure it's a valid CSV, Excel, or QVD file under 100MB")
       return
     }
     setUploading(true)
@@ -114,10 +114,10 @@ export default function Home() {
         setUploadError(
           err.status === 0
             ? err.message
-            : "Couldn't read this file — make sure it's a valid CSV or Excel file under 100MB",
+            : "Couldn't read this file — make sure it's a valid CSV, Excel, or QVD file under 100MB",
         )
       } else {
-        setUploadError("Couldn't read this file — make sure it's a valid CSV or Excel file under 100MB")
+        setUploadError("Couldn't read this file — make sure it's a valid CSV, Excel, or QVD file under 100MB")
       }
     } finally {
       setUploading(false)
@@ -129,7 +129,7 @@ export default function Home() {
   async function handleAddFile(file: File) {
     if (!datasetInfo) return
     if (!validExtension(file.name)) {
-      setUploadError("Couldn't read this file — make sure it's a valid CSV or Excel file under 100MB")
+      setUploadError("Couldn't read this file — make sure it's a valid CSV, Excel, or QVD file under 100MB")
       return
     }
     setAddingFile(true)
@@ -141,7 +141,7 @@ export default function Home() {
       if (err instanceof ApiError && err.status === 0) {
         setUploadError(err.message)
       } else {
-        setUploadError("Couldn't add this file — make sure it's a valid CSV or Excel file under 100MB")
+        setUploadError("Couldn't add this file — make sure it's a valid CSV, Excel, or QVD file under 100MB")
       }
     } finally {
       setAddingFile(false)
@@ -305,7 +305,7 @@ export default function Home() {
           {restoring ? (
             <p className="text-sm text-gray-400">Loading…</p>
           ) : !hasDataset ? (
-            <p className="text-sm text-gray-500">Upload a CSV or Excel file to get started</p>
+            <p className="text-sm text-gray-500">Upload a CSV, Excel, or QVD file to get started</p>
           ) : (
             <p className="text-sm text-gray-500">
               Loaded <span className="font-medium text-gray-800">{datasetInfo.dataset.name}</span>
@@ -321,7 +321,7 @@ export default function Home() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx,.xls,.qvd"
               className="hidden"
               onChange={onFileInputChange}
               disabled={uploading || addingFile}
@@ -330,7 +330,7 @@ export default function Home() {
             <input
               ref={addFileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,.xlsx,.xls,.qvd"
               className="hidden"
               onChange={onAddFileInputChange}
               data-testid="add-file-input"

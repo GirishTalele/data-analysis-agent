@@ -27,6 +27,7 @@ dependencies = [
     { name = "pandas" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyqvd" },
     { name = "python-multipart" },
     { name = "sqlalchemy" },
     { name = "structlog" },
@@ -52,6 +53,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.2" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings", specifier = ">=2.3" },
+    { name = "pyqvd", specifier = ">=2.3.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "python-multipart", specifier = ">=0.0.9" },
@@ -1443,6 +1445,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyqvd"
+version = "2.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tabulate" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7a/fa/141a4d7f3c2bcfcadcb462d7556c54fdd63ec310cbf551cf1a0a953f579c/pyqvd-2.3.2.tar.gz", hash = "sha256:b8d417dad1c20e9931c553004b2b3d18550daa4f321f3ed0c41bd70f978f85dd", size = 26343, upload-time = "2026-03-29T14:44:51.058Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ae/0b/629336716fddd572dcdaa207e5dc6c49a48fe7b5ea69ea576eb4336e05a2/pyqvd-2.3.2-py3-none-any.whl", hash = "sha256:b3ea045f27b648b871022ab784e902a32c9efbc1648aa58f7f3782c43af767e8", size = 28652, upload-time = "2026-03-29T14:44:49.803Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1669,6 +1683,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5e/89/b4a0bcfdf4f71a3dea31379f095929613d7e4528a0996bca6aa964cd0dca/structlog-26.1.0.tar.gz", hash = "sha256:f63a716cbd1b1291cf7661de7794b455acfa4c43c5bcf1630e6ad5ddc1adb3b7", size = 1459881, upload-time = "2026-06-06T07:33:39.348Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a9/18/489c97b834dfff9cf2fc2507cede4bcd4b11e67f84bc462acd1992496f86/structlog-26.1.0-py3-none-any.whl", hash = "sha256:e081a26d6c373e6d201eca24eede26d8ffab07f88f477822e679183428d3d91e", size = 73764, upload-time = "2026-06-06T07:33:38.046Z" },
+]
+
+[[package]]
+name = "tabulate"
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload-time = "2022-10-06T17:21:48.54Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload-time = "2022-10-06T17:21:44.262Z" },
 ]
 
 [[package]]

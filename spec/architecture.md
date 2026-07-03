@@ -116,13 +116,15 @@ data/
 - **Database + ORM:** SQLite (`data/agent.db`) + SQLAlchemy 2.0 declarative models + Alembic migrations. SQLite is the correct choice here (not an assumption to override) because this is an explicitly local, single-user tool per `spec/roadmap.md`.
 - **Frontend:** Next.js 15 + React 19, static export served by FastAPI at `/app` (existing skeleton pattern) — Tailwind for styling.
 - **Dependency management:** uv (Python, `pyproject.toml`), pnpm (frontend).
-- **Data processing:** pandas (already implied by the sandbox design) — added to `[project.dependencies]` (never dev-only, since the sandbox runner script needs it at runtime) along with `openpyxl` for `.xlsx` support.
+- **Data processing:** pandas (already implied by the sandbox design) — added to `[project.dependencies]` (never dev-only, since the sandbox runner script needs it at runtime) along with `openpyxl` for `.xlsx` support and (Phase 3) `pyqvd` for `.qvd` support.
+- **QVD (QlikView Data) support (Phase 3):** `pyqvd` — a pure-Python reader that parses the proprietary QVD binary columnar format directly into a `pandas.DataFrame`, with no Qlik runtime and no external service (satisfies the local-first / raw-row privacy constraints). Declared as a **normal (non-dev) `[project.dependencies]` entry**, not a dev-only extra, because `src/sandbox/runner.py` runs in an isolated subprocess (`sys.executable src/sandbox/runner.py …`) and must be able to `import pyqvd` there to load a QVD-backed dataset at query time — the same reason `pandas`/`openpyxl` are runtime deps. Chosen over alternatives because it is pip-installable, pure-Python (no native/Qlik dependency), and yields a DataFrame that flows unchanged through the existing profiling/sandbox/join/export code paths. If `pyqvd` proves unworkable at build time, substitute another pure-Python QVD→DataFrame reader under the same constraints (no external service, no Qlik runtime).
 - **Observability:** structlog (existing `src/observability/events.py`) extended so every graph node logs `{trace_id=run_id, node, latency_ms, tokens, error}`; LangSmith tracing enabled via `LANGCHAIN_TRACING_V2=true` + `LANGCHAIN_API_KEY` (+ `LANGCHAIN_PROJECT`) env vars — LangGraph auto-traces through `langchain-core` callbacks when these are set, no code change required beyond declaring the settings and documenting them in `.env.example`.
 
 | Key library | Version | Purpose |
 |-------------|---------|---------|
 | `pandas` | >=2.2 | Profiling + sandboxed code execution |
 | `openpyxl` | >=3.1 | `.xlsx` read support for pandas |
+| `pyqvd` | >=1.0 | `.qvd` (QlikView) → `pandas.DataFrame` read support (Phase 3); pure-Python, must import in the sandbox subprocess |
 | `google-genai` | >=2.9.0 (existing) | Gemini SDK |
 | `langgraph` | >=0.1 (existing) | Reasoning-loop graph |
 | `python-multipart` | >=0.0.9 | FastAPI file upload parsing |

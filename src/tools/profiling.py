@@ -30,6 +30,13 @@ def load_dataframe(path: str | Path, file_type: str) -> pd.DataFrame:
         reader = pd.read_csv
     elif file_type in ("xlsx", "xls"):
         reader = pd.read_excel
+    elif file_type == "qvd":
+        # QlikView QVD -> DataFrame via the pure-Python pyqvd reader (local,
+        # no Qlik runtime). Raw rows never leave the local pandas process.
+        def reader(p):  # type: ignore[misc]
+            from pyqvd import QvdTable
+
+            return QvdTable.from_qvd(str(p)).to_pandas()
     else:
         raise ProfilingError(f"Unsupported file type '{file_type}'")
 

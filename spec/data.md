@@ -31,7 +31,7 @@ One physical file backing a Dataset. One row in Phase 1; multiple rows per datas
 | dataset_id | text (FK → Dataset.id) | yes | |
 | original_filename | text | yes | As uploaded |
 | stored_path | text | yes | Path relative to `AGENT_DATA_DIR` |
-| file_type | text | yes | `"csv"` \| `"xlsx"` \| `"xls"` |
+| file_type | text | yes | `"csv"` \| `"xlsx"` \| `"xls"` \| `"qvd"` (Phase 3; QlikView binary, read via `pyqvd` — see `spec/architecture.md` → Stack) |
 | size_bytes | integer | yes | |
 | row_count | integer | yes | Row count of this individual file |
 | uploaded_at | timestamp | yes | |

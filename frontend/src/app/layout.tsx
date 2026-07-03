@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Data Analysis Agent',
-  description: 'Upload a CSV or Excel file and ask questions about it in plain language',
+  description: 'Upload a CSV, Excel, or QVD file and ask questions about it in plain language',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

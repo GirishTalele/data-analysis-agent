@@ -19,6 +19,7 @@ ALLOWED_EXTENSIONS: dict[str, str] = {
     ".csv": "csv",
     ".xlsx": "xlsx",
     ".xls": "xls",
+    ".qvd": "qvd",
 }
 
 

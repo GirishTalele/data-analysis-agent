@@ -18,6 +18,11 @@ def test_validate_extension_accepts_csv_xlsx_xls():
     assert validate_extension("sales.xls") == "xls"
 
 
+def test_validate_extension_accepts_qvd():
+    # Phase 3: QVD (QlikView Data) is accepted everywhere CSV/Excel is.
+    assert validate_extension("report.qvd") == "qvd"
+
+
 def test_validate_extension_rejects_unsupported_type():
     with pytest.raises(UnsupportedFileTypeError):
         validate_extension("sales.txt")

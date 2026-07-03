@@ -15,7 +15,7 @@ test.describe('data analysis agent — phase 2 features', () => {
     page,
   }) => {
     await page.goto('./')
-    await expect(page.getByText('Upload a CSV or Excel file to get started')).toBeVisible()
+    await expect(page.getByText('Upload a CSV, Excel, or QVD file to get started')).toBeVisible()
 
     await page.getByTestId('file-input').setInputFiles(FIXTURE_CSV)
     await expect(page.getByTestId('profile-card')).toBeVisible({ timeout: 30_000 })

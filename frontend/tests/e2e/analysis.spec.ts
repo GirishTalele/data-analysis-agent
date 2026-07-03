@@ -17,7 +17,7 @@ test.describe('data analysis agent — primary journey', () => {
     await page.goto('./')
 
     // Page loads and is styled (empty state visible).
-    await expect(page.getByText('Upload a CSV or Excel file to get started')).toBeVisible()
+    await expect(page.getByText('Upload a CSV, Excel, or QVD file to get started')).toBeVisible()
 
     // Upload the fixture CSV.
     await page.getByTestId('file-input').setInputFiles(FIXTURE_CSV)
