@@ -299,7 +299,7 @@ def _build_graph() -> StateGraph:
 
     g.add_conditional_edges(
         "check_clarity", after_clarity,
-        {"ask_clarification": "ask_clarification", "generate_code": "generate_code"},
+        {"ask_clarification": "ask_clarification", "generate_code": "generate_code", "handle_error": "handle_error"},
     )
     g.add_conditional_edges(
         "generate_code", after_generate_code,

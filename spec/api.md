@@ -180,6 +180,14 @@ This same `result_table` field also appears on each `QueryRun` record returned b
 
 **Purpose:** List derived/exported datasets for a dataset.
 
+### `GET /datasets/{dataset_id}/derived/{derived_id}/download`
+
+**Purpose:** Download a previously-exported derived/cleaned dataset as a CSV file (the `download_url` returned by `POST /datasets/{dataset_id}/export`).
+
+**Path params:** `dataset_id` (the parent dataset), `derived_id` (the exported derived dataset).
+
+**Response:** the CSV file (`text/csv` attachment).
+
 ### `GET /query-runs`
 
 **Purpose:** Browse the full audit trail (across all conversations/datasets).
