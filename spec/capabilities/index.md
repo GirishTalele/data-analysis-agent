@@ -1,23 +1,16 @@
 # Capabilities Index
 
-> **Boilerplate status:** The spec-writer sub-agent creates one file per capability in this directory. Each file describes exactly one discrete thing the agent can do.
-
 ---
-
-## What Is a Capability?
-
-A capability is a single, discrete action or behavior the agent performs. Examples:
-- "Search the web for companies matching criteria X"
-- "Draft a personalized email given a lead profile"
-- "Send a Slack notification when a threshold is crossed"
 
 ## Capabilities in This Project
 
-<!-- FILL IN: List capabilities here as they are defined. Each entry links to its spec file (no number prefix). -->
-
-| Capability | File |
-|-----------|------|
-| <!-- name --> | [name.md](name.md) |
+| Capability | Phase | File |
+|-----------|-------|------|
+| File Ingestion & Column Validation | 1 | [file-ingestion-validation.md](file-ingestion-validation.md) |
+| GR Aggregation & Chart/Table Generation | 1 | [gr-aggregation-reporting.md](gr-aggregation-reporting.md) |
+| HTML Email Composition & SMTP Delivery | 1 | [email-composition-delivery.md](email-composition-delivery.md) |
+| Error Surfacing in the Web UI | 1 | [error-surfacing.md](error-surfacing.md) |
+| Per-Recipient Plant Scoping | 2 | [recipient-plant-scoping.md](recipient-plant-scoping.md) |
 
 ## How to Add a New Capability
 
